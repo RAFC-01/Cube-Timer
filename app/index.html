@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cube Timer</title>
+    <script src="main.js" defer></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="timer">
+        <div id="timer-left"></div>
+        <div id="timer-right">
+            <div id="timer_info"></div>
+            <div id="timer_time">0.000</div>
+            <div id="timer_hidable">
+                <div id="timer_ao5" class="timer_info">ao5: <span id="timer_ao5_number" class="timer_number">-</span></div>
+                <div id="timer_ao12" class="timer_info">ao12: <span id="timer_ao12_number" class="timer_number">-</span></div>
+            </div>
+        </div>
+    </div>
+    <div id="overlay">
+        <div id="session_times">
+            <div id="records">
+                <div id="records_title">BEst times</div>
+                <div id="records_content">
+                    <div id="records_table_names">
+                        <div class="table_name">Type</div>
+                        <div class="table_name">Session</div>
+                        <div class="table_name">All time</div>                                
+                    </div>
+                    <div id="records_single" class="records_row">
+                        <div class="table_name">Single</div>
+                        <div class="table_name">-</div>
+                        <div class="table_name">-</div>
+                    </div>
+                    <div id="records_ao5" class="records_row">
+                        <div class="table_name">Ao5</div>
+                        <div class="table_name">-</div>
+                        <div class="table_name">-</div>
+                    </div>
+                    <div id="records_ao12" class="records_row">
+                        <div class="table_name">Ao12</div>
+                        <div class="table_name">-</div>
+                        <div class="table_name">-</div>
+                    </div>
+                </div>
+            </div>
+            <div id="times_title">Times</div>
+            <div id="times_mean">
+                <div id="mean_title">mean:</div>
+                <div id="mean_number">.....</div> 
+            </div>
+            <div id="times_table_names">
+                <div class="table_name">Nr</div>
+                <div class="table_name">Time</div>
+                <div class="table_name">Ao5</div>
+                <div class="table_name">Ao12</div>
+            </div>
+            <div id="times_content"></div>
+        </div>
+        <div id="currentAo5"></div>
+        <div id="scramble">
+            <div id="scramble-left"></div>
+            <div id="scramble-string"></div>
+        </div>
+        <div id="popup_box">
+            <div id="scramble-left"></div>
+            <div id="popup"></div>
+        </div>
+    </div>    
+</body>
+</html>
