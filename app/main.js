@@ -1,12 +1,26 @@
 // 0.1 alpha - first version and start of the app
+// 0.2 alpha - saving data (best only for now), timer mode typing
 
-const version = '0.1 alpha';
+const appTitle = 'Cube Timer';
 
-document.title += ' - version ' + version;
+const version = '0.2 alpha';
+
+document.title = appTitle + ' - version ' + version;
 
 let currentTime = 0;
 let currentAo5 = 0;
 let currentAo12 = 0;
+
+let requriedToStart = ['mainData'];
+let changedData = [];
+
+let savableData = {
+    mainData: {}
+}
+
+let loadStatus = {};
+
+let loadProgess = 0;
 
 const pressedKeys = {};
 
@@ -16,8 +30,12 @@ const options = {
     currentPuzzle: '2x2'
 }
 
+let solvesDoneSinceSave = 0;
+
 let currentTimes = [];
 let timesData = [];
+
+let currentSession = {};
 
 const elements = {
     timer: document.getElementById('timer'),
@@ -40,7 +58,7 @@ const elements = {
     allTime_ao5: document.querySelector('#records_ao5 > div:nth-child(3)'),
     session_ao12: document.querySelector('#records_ao12 > div:nth-child(2)'),
     allTime_ao12: document.querySelector('#records_ao12 > div:nth-child(3)'),
-
+    loadScreen: document.getElementById('loadScreen')
 }
 
 let allTimeBest = {
@@ -50,6 +68,7 @@ let allTimeBest = {
 }
 
 const actions = {
+    appLoaded: false,
     timeSinceStarted: Date.now(),
     timerStarted: false,
     lastUpdateTime: 0,
@@ -224,7 +243,7 @@ function timerAction(){
 }
 
 function startTimer(){
-    if (actions.justStopped) return;
+    if (actions.justStopped || !actions.appLoaded) return;
     if (actions.timerStarted){
         stopTimer();
         return;
@@ -244,7 +263,8 @@ function stopTimer(){
     timerDivResetStyles();
     // save time
     currentTimes.push(currentTime);
-    
+    solvesDoneSinceSave++;
+
     let timeData = {
         time: currentTime,
         scramble: actions.lastGeneratedScramble,
@@ -255,13 +275,55 @@ function stopTimer(){
 
     timesData.push(timeData);
 
+    if (currentSession){
+        let sessionName = getSessionName();
+        if (!savableData[sessionName]) savableData[sessionName] = { check: true, arr: []};
+        savableData[sessionName].arr.push(timeData);
+        markAsChanged(sessionName);
+    }
+
+    // addToAllSolves(timeData, options.currentPuzzle);
+
     calculateAo();
     calculateMean();
     
     elements.time.innerText = convertMilisToTime(currentTime);
     addTimesDiv(currentTime);
 
-    getNewScramble()
+    getNewScramble();
+}
+
+function addAlotOfTimes(){
+    for (let i = 0; i < 1000000; i++){
+        let data = {
+            time: 51516151,
+            scramble: 'R SD FS DFSFS FD',
+            solveTime: Date.now()
+        }
+        addToAllSolves(data, options.currentPuzzle);
+    }
+}
+
+function addToAllSolves(timeData, currentP){
+    if (!savableData.allTimes[currentP]) savableData.allTimes[currentP] = [];
+    savableData.allTimes[currentP].push(timeData);
+    // saveAllTimes();
+}
+
+function saveAllTimes(data = {}){
+    if (!solvesDoneSinceSave) return false;
+    if (loadStatus['allTimes']){
+        window.electron.send('save-data', {
+            times: savableData.allTimes,
+            type: 'allTimes',
+            closing: data.closing,
+        }); 
+        solvesDoneSinceSave = 0;
+        return true;
+    }else{
+        console.error('data was not loaded so it cannot be saved!');
+        return false;
+    }
 }
 
 function updateBestSingle(data){
@@ -301,11 +363,15 @@ function updateBestAo12(data){
     }         
 } 
 
+function loadData(type, data = {}){
+    window.electron.send('get-data', {type: type, isSession: data.isSession}); 
+}
 
 function getAverage(arr){
     let sum = 0;
     for (let i = 0; i < arr.length; i++){
-        sum += arr[i];
+        let t = arr[i].time ? arr[i].time : arr[i];
+        sum += t;
     }
     return Math.floor(sum / arr.length);
 }
@@ -318,8 +384,8 @@ function getAo(number){
     let scrambles = [];
 
     for (let i = 0; i < number; i++){
-        let time = currentTimes[currentTimes.length - 1 - i];
-        let scramble = timesData[currentTimes.length - 1 - i].scramble;
+        let time = timesData[timesData.length - 1 - i].time;
+        let scramble = timesData[timesData.length - 1 - i].scramble;
         if (biggest < time) biggest = time;
         if (smallest > time) smallest = time;
         times.push(time);
@@ -336,7 +402,7 @@ function getAo(number){
 
 function calculateMean(){
     // of all solves
-    let mean = getAverage(currentTimes);
+    let mean = getAverage(timesData);
     if (mean != 0){
         elements.mean_number.innerText = convertMilisToTime(mean, true); 
     }else{
@@ -345,14 +411,14 @@ function calculateMean(){
 
 }
 function calculateAo(){
-    if (currentTimes.length > 4){
+    if (timesData.length > 4){
         let timeData = getAo(5) 
         currentAo5 = timeData.time;
         updateBestAo5(timeData);
         elements.timer_ao5_number.innerText = convertMilisToTime(currentAo5);
         elements.timer_ao5_number.classList.add('hover_highlight');
     }
-    if (currentTimes.length > 11){
+    if (timesData.length > 11){
         let timeData = getAo(12); 
         currentAo12 = timeData.time;
         updateBestAo12(timeData);
@@ -360,6 +426,8 @@ function calculateAo(){
         elements.timer_ao12_number.classList.add('hover_highlight');
     }
 }
+
+
 
 function simulateTimerStop(){
     currentTime = 50;
@@ -383,7 +451,7 @@ function getTimeLabelDiv(data){
 
     if (solveTime.length > 6) document.documentElement.style.setProperty('--left-size-min-width', '300px');
 
-    let number = data.number ? data.number : currentTimes.length;
+    let number = data.number ? data.number : timesData.length;
 
     return `
     <div class='times_timelabel' data-index='${number-1}'>
@@ -396,8 +464,10 @@ function getTimeLabelDiv(data){
 
 function loadTimesDiv(){
     let content = '';
-    for (let i = 0; i < currentTimes.length; i++){
-        content += getTimeLabelDiv({time: currentTimes[i], number: i+1});
+    for (let i = timesData.length-1; i >= 0; i--){
+        let data = timesData[i];
+        data.number = i + 1;
+        content += getTimeLabelDiv(data);
     }
     elements.times_content.innerHTML = content;
 }
@@ -485,8 +555,152 @@ document.addEventListener('mousedown', (e) => {
 
         loadPopUp(data);
     }
+});   
+
+function markAsChanged(data){
+    if (changedData.includes(data)) return;
+    changedData.push(data);
+}
+
+function saveData(type){
+    if (!loadStatus[type] || !savableData[type].check) return;
+    if (!savableData[type].type) savableData[type].type = type;
+    window.electron.send('save-data', savableData[type]);
+}
+
+window.addEventListener('beforeunload', (e) => {
+    for (let i = 0; i < changedData.length; i++){
+        saveData(changedData[i]);
+    }
+    // let isSaving = saveAllTimes({closing: true});
+    // if (0){
+    //     // e.preventDefault();
+    //     return false;
+    // }
 });
 
-getNewScramble(options.currentPuzzle);
-// simulateTimerStop();
-mainLoop();
+window.electron.receive('close-app', () => {
+    window.close();
+})
+
+window.electron.receive('load-data', (save) => {
+    savableData[save.type] = save.data;
+    loadStatus[save.type] = true;
+
+    if (save.type.includes('session')) loadSessionTimes(save.data);
+
+    if (!actions.appLoaded){
+        if (checkForRequiredLoaded()){
+            loadApp();
+        }
+    
+        updateProgressWindow();
+    }
+});
+
+function createSession(data = {}){
+    console.log('this')
+    let mainData = savableData.mainData;
+    let numberOfSessions = mainData.numberOfAllSessions ? mainData.numberOfAllSessions : 0;
+    let session = {
+        id: numberOfSessions,
+        name: '',
+        bestTimes: {},
+        puzzle: data.puzzle,
+        mode: data.mode,
+    }
+    currentSession = session;
+    console.log(currentSession);
+    numberOfSessions++;
+    mainData.numberOfAllSessions = numberOfSessions;
+    
+    markAsChanged('mainData');
+
+    if (!mainData.sessions) mainData.sessions = [];
+    mainData.sessions.push(session);
+    
+    loadSession();
+}
+
+function getSessionName(){
+    if (!currentSession.id) return false;
+    let name = 'session'+currentSession.id;
+    return name;
+}
+
+function loadSessionTimes(data){
+    console.log(data);
+    timesData = data.arr;
+    loadTimesDiv();
+    calculateMean();
+}
+
+function loadSession(sessionID){
+    if ((sessionID === undefined || sessionID === null) && currentSession.id === undefined) return;
+
+    if (sessionID && sessionID !== currentSession.id){
+        // gets the data of session with this id
+        
+        currentSession.id = sessionID;
+
+        let name = getSessionName();
+
+        if (name) loadData(name, {isSession: true});
+    }
+
+    if (savableData.mainData.session) delete savableData.mainData.session;
+
+    if (savableData.mainData.sessionID != currentSession.id) {
+        savableData.mainData.sessionID =  currentSession.id;
+        markAsChanged('mainData');
+    }
+    console.log('here')
+    getNewScramble(options.currentPuzzle);
+}
+
+function updateProgressWindow(){
+    let loadProcentage =  Object.keys(loadStatus).length / requriedToStart.length;
+    let content = `
+    <div id='loadAppTitle'>${appTitle}</div>
+    <div id='loadProgress'>
+        ${Math.floor(loadProcentage*100)}%
+    </div>
+    `;
+    elements.loadScreen.innerHTML = content;
+}
+
+function checkForRequiredLoaded(){
+    for (let i = 0; i < requriedToStart.length; i++){
+        let name = requriedToStart[i];
+        if (!loadStatus[name]) return false;
+    }
+    return true;
+}
+
+for (let i = 0; i < requriedToStart.length; i++){
+    let name = requriedToStart[i];
+    loadData(name);
+}
+
+function loadApp(){
+    if (actions.appLoaded) return;
+    elements.loadScreen.style.display = 'none';
+    savableData.mainData.location = 'classic';
+    if (savableData.mainData.appVersion != version){
+        savableData.mainData.appVersion = version;
+        console.log('app updated!');
+        markAsChanged('mainData');
+    }
+
+    let mainData = savableData.mainData;
+
+    if (mainData.location){
+        loadSession(mainData.sessionID);
+    }
+    console.log(mainData.sessionID);
+    if (!mainData.sessionID) createSession({puzzle: '2x2', mode: 'classic'});
+    // simulateTimerStop();
+    mainLoop();
+
+    actions.appLoaded = true;
+}

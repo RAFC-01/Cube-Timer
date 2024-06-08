@@ -312,8 +312,37 @@ body{
   .close:after {
     transform: rotate(-45deg);
   }
-
+#loadScreen{
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--background-dark);
+    z-index: 99;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+#loadAppTitle{
+    font-size: 10vw;
+    text-transform: uppercase;
+    color: var(--font-color);
+    text-align: center;
+}
+#loadProgress{
+    font-size: 6vw;
+}
+@media only screen and (max-width: 1200px){
+    #scramble{
+        font-size: 4vw;
+    }
+}
 @media only screen and (max-width: 800px){
+    #scramble{
+        font-size: 6vw;
+    }
     #session_times{
         display: none !important;
     }
