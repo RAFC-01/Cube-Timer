@@ -11,7 +11,10 @@ let currentTime = 0;
 let currentAo5 = 0;
 let currentAo12 = 0;
 
-let requriedToStart = ['mainData'];
+let requriedToStart = [
+    {name: 'mainData'}, 
+    {name: 'sessionInfo', data: {type: 'bin'} }
+    ];
 let changedData = [];
 
 let savableData = {
@@ -27,12 +30,12 @@ const pressedKeys = {};
 const options = {
     timerMode: 'space',
     timerFps: 25,
-    currentPuzzle: '2x2'
+    currentPuzzle: '2x2',
+    maxVisibleTimes: 40 
 }
 
 let solvesDoneSinceSave = 0;
 
-let currentTimes = [];
 let timesData = [];
 
 let currentSession = {};
@@ -58,7 +61,8 @@ const elements = {
     allTime_ao5: document.querySelector('#records_ao5 > div:nth-child(3)'),
     session_ao12: document.querySelector('#records_ao12 > div:nth-child(2)'),
     allTime_ao12: document.querySelector('#records_ao12 > div:nth-child(3)'),
-    loadScreen: document.getElementById('loadScreen')
+    loadScreen: document.getElementById('loadScreen'),
+    mean_number_of_solves: document.getElementById('mean_number_of_solves')
 }
 
 let allTimeBest = {
@@ -78,7 +82,8 @@ const actions = {
         single: 0,
         ao5: 0,
         ao12: 0
-    }
+    },
+    currentSession: 0,
 }
 
 function mainLoop(){
@@ -91,6 +96,7 @@ function mainLoop(){
             currentTime = time;
 
             if (now - actions.lastUpdateTime > 1000 / options.timerFps){ // limit html updates
+
                 elements.time.innerText = convertMilisToTime(time);
                 actions.lastUpdateTime = now;
             }
@@ -260,9 +266,11 @@ function stopTimer(){
     if (!actions.timerStarted) return;
     actions.timerStarted = false;
     actions.justStopped = true;
+    elements.time.innerText = convertMilisToTime(currentTime);
+    console.log('stop');
     timerDivResetStyles();
     // save time
-    currentTimes.push(currentTime);
+
     solvesDoneSinceSave++;
 
     let timeData = {
@@ -272,14 +280,15 @@ function stopTimer(){
     }
 
     updateBestSingle(timeData);
-
-    timesData.push(timeData);
-
+    
     if (currentSession){
         let sessionName = getSessionName();
         if (!savableData[sessionName]) savableData[sessionName] = { check: true, arr: []};
+        else if (!savableData[sessionName].arr) savableData[sessionName].arr = [];
         savableData[sessionName].arr.push(timeData);
         markAsChanged(sessionName);
+    }else{
+        timesData.push(timeData);
     }
 
     // addToAllSolves(timeData, options.currentPuzzle);
@@ -287,7 +296,6 @@ function stopTimer(){
     calculateAo();
     calculateMean();
     
-    elements.time.innerText = convertMilisToTime(currentTime);
     addTimesDiv(currentTime);
 
     getNewScramble();
@@ -325,7 +333,14 @@ function saveAllTimes(data = {}){
         return false;
     }
 }
-
+ 
+function getCurrentSession(){
+    if (!savableData.mainData || !savableData.mainData.sessions) return;
+    for (let i = 0; i < savableData.mainData.sessions.length; i++){
+        let s = savableData.mainData.sessions[i];
+        if (s.id == currentSession.id) return s;
+    }
+}
 function updateBestSingle(data){
     let time = data.time;
     if (time < actions.sessionBest.single.time || actions.sessionBest.single == 0){
@@ -339,7 +354,7 @@ function updateBestSingle(data){
     } 
 
 }
-function updateBestAo5(data){
+function updateBestAo5(data = {}){
     let time = data.time;
     if (time < actions.sessionBest.ao5.time || actions.sessionBest.ao5 == 0){
         actions.sessionBest.ao5 = data;
@@ -348,10 +363,11 @@ function updateBestAo5(data){
     if (time < allTimeBest.ao5.time || allTimeBest.ao5 == 0){
         allTimeBest.ao5 = data;
         elements.allTime_ao5.innerText = convertMilisToTime(time);
+
     }     
 }
 
-function updateBestAo12(data){
+function updateBestAo12(data = {}){
     let time = data.time;
     if (time < actions.sessionBest.ao12.time || actions.sessionBest.ao12 == 0){
         actions.sessionBest.ao12 = data;
@@ -363,8 +379,9 @@ function updateBestAo12(data){
     }         
 } 
 
-function loadData(type, data = {}){
-    window.electron.send('get-data', {type: type, isSession: data.isSession}); 
+function loadData(path, data = {}){
+    if (!data.fileLoc) data.fileLoc = 'saves';
+    window.electron.send('get-data', {path: path, isSession: data.isSession, fileLoc: data.fileLoc, type: data.type}); 
 }
 
 function getAverage(arr){
@@ -376,39 +393,56 @@ function getAverage(arr){
     return Math.floor(sum / arr.length);
 }
 
-function getAo(number){
+function getAo(number, index){
     let biggest = 0;
     let smallest = Infinity;
 
     let times = [];
-    let scrambles = [];
+    let solves = [];
 
+    let start = index ? index : timesData.length;
+    
     for (let i = 0; i < number; i++){
-        let time = timesData[timesData.length - 1 - i].time;
-        let scramble = timesData[timesData.length - 1 - i].scramble;
+        let time = timesData[start - 1 - i].time;
+        let scramble = timesData[start - 1 - i].scramble;
         if (biggest < time) biggest = time;
         if (smallest > time) smallest = time;
         times.push(time);
-        scrambles.push(scramble)
+        solves.push([time, scramble])
     }
-
-    let allTimes = times;
 
     times.splice(times.indexOf(smallest), 1);
     times.splice(times.indexOf(biggest), 1);
 
-    return {time: getAverage(times), times: allTimes, scrambles: scrambles};
+    return {time: getAverage(times), solves: solves};
 }
 
 function calculateMean(){
     // of all solves
+    if (!timesData.length) return;
     let mean = getAverage(timesData);
     if (mean != 0){
         elements.mean_number.innerText = convertMilisToTime(mean, true); 
     }else{
         elements.mean_number.innerText = '-';
     }
+    elements.mean_number_of_solves.innerText = ' (' + timesData.length + ') ';
 
+}
+function getAvgAtIndex(index = 0){
+    let avgs = {};
+    if (index > 4){
+        let ao5 = getAo(5, index);
+        avgs['ao5'] = ao5.time;         
+        updateBestAo5(ao5);
+    } 
+    if (index > 11){
+        let ao12 =  getAo(12, index)
+        avgs['ao12'] = ao12.time;
+        updateBestAo12(ao12);
+    } 
+
+    return avgs;
 }
 function calculateAo(){
     if (timesData.length > 4){
@@ -434,14 +468,16 @@ function simulateTimerStop(){
     actions.timerStarted = true;
     stopTimer();
 
-    let data = timesData[0];
-    data.type = 'single';
+    // let data = timesData[0];
+    // data.type = 'single';
 
-    loadPopUp(data);
+    // loadPopUp(data);
 }
 
 function addTimesDiv(time){
-    elements.times_content.innerHTML = getTimeLabelDiv({time: time}) + elements.times_content.innerHTML;
+    if (elements.times_content.children[0].data.index > timesData.length - 5){
+        elements.times_content.insertBefore(getTimeLabelDiv({time: time}), elements.times_content.firstChild);
+    }
 }
 
 function getTimeLabelDiv(data){
@@ -449,25 +485,55 @@ function getTimeLabelDiv(data){
     let ao5 = currentAo5 > 0 ? convertMilisToTime(currentAo5) : '-';
     let ao12 = currentAo12 > 0 ? convertMilisToTime(currentAo12) : '-';
 
+    if (data.avgs && data.avgs['ao5']) ao5 = convertMilisToTime(data.avgs['ao5']);
+    if (data.avgs && data.avgs['ao12']) ao12 = convertMilisToTime(data.avgs['ao12']);
+
     if (solveTime.length > 6) document.documentElement.style.setProperty('--left-size-min-width', '300px');
 
     let number = data.number ? data.number : timesData.length;
+    
+    delete data.avgs;
 
-    return `
-    <div class='times_timelabel' data-index='${number-1}'>
+    let div = document.createElement('div');
+    div.className = 'times_timelabel';
+    div.dataset.index = number - 1;
+
+    div.innerHTML = `
         <div class='times_solveNum time_row'>${number}</div>
         <div class='times_time time_row hover_highlight'>${solveTime}</div>
         <div class='times_ao5 time_row ${ao5 != '-' ? 'hover_highlight' : ''}'>${ao5}</div>
         <div class='times_ao12 time_row ${ao12 != '-' ? 'hover_highlight' : ''}'>${ao12}</div>
-    </div>`
+    `;
+
+    return div;
+
+}
+function addLabelBefore(index){
+    let data = timesData[index];
+    data.number = index+1;
+    data.avgs = getAvgAtIndex(index);
+    let label = getTimeLabelDiv(data);
+
+    elements.times_content.insertBefore(label, elements.times_content.firstChild);    
+}
+function addLabelAfter(index){
+    let data = timesData[index];
+    data.number = index;
+    data.avgs = getAvgAtIndex(index + 1);
+    let label = getTimeLabelDiv(data);
+
+    elements.times_content.appendChild(label);
 }
 
 function loadTimesDiv(){
     let content = '';
-    for (let i = timesData.length-1; i >= 0; i--){
+    let end = timesData.length > options.maxVisibleTimes ? timesData.length - options.maxVisibleTimes : 0;
+    for (let i = timesData.length-1; i >= end; i--){
         let data = timesData[i];
         data.number = i + 1;
-        content += getTimeLabelDiv(data);
+        updateBestSingle(data);
+        data.avgs = getAvgAtIndex(i+1);
+        content += `<div class='times_timelabel' data-index='${data.number}'>${getTimeLabelDiv(data).innerHTML}</div>`;
     }
     elements.times_content.innerHTML = content;
 }
@@ -481,6 +547,7 @@ function timerDivRunningStyles(){
 
 }
 function timerDivResetStyles(){
+    console.log('change styles');
     elements.time.style.fontSize = '6vw';
     elements.timer_hidable.style.display = 'block';
     elements.timer_info.style.display = 'block';
@@ -549,7 +616,7 @@ document.addEventListener('mousedown', (e) => {
     }
     if (t.classList.contains('times_time')){
         let index = t.parentElement.dataset.index;
-        let data = timesData[index];
+        let data = timesData[index - 1];
 
         data.type = 'single';
 
@@ -562,11 +629,51 @@ function markAsChanged(data){
     changedData.push(data);
 }
 
-function saveData(type){
-    if (!loadStatus[type] || !savableData[type].check) return;
-    if (!savableData[type].type) savableData[type].type = type;
-    window.electron.send('save-data', savableData[type]);
+function saveData(path){
+    if (!loadStatus[path] || !savableData[path].check) return;
+    if (!savableData[path].path) savableData[path].path = path;
+    let fileLocation = savableData[path].fileLoc;
+    let fileInfo = {
+        path: path,
+        fileLoc: fileLocation,
+        file: savableData[path]
+    }
+    window.electron.send('save-data', fileInfo);
 }
+
+elements.times_content.addEventListener('scroll', (e)=> {
+    // console.log(elements.times_content.scrollTop);
+    // e.preventDefault();
+    let top = elements.times_content.scrollTop; 
+    let time_c = elements.times_content;
+    let itemHeight = time_c.children[0].offsetHeight;
+    let times_children = time_c.childNodes;
+    let dir = actions.mouseWheelDir;
+    let speed = actions.mouseMove;
+    if (top > itemHeight*4 && dir == 'down') {
+        let newIndex = parseInt(times_children[times_children.length - 1].dataset.index);
+        if (!newIndex || newIndex < 0) return;
+        time_c.childNodes[0].remove();
+        addLabelAfter(newIndex);
+        actions.lastScrollPos = -9999;
+        time_c.scrollTop -= 0;
+        return;
+    }else if (top < itemHeight*4 && dir == 'up'){
+        let newIndex = parseInt(times_children[0].dataset.index) + 1;
+        if (!newIndex || newIndex > timesData.length - 1) return;
+        time_c.childNodes[times_children.length-1].remove();
+        addLabelBefore(newIndex);
+        actions.lastScrollPos = itemHeight * 6;
+        return;
+    }
+    actions.lastScrollPos = top;
+
+});
+
+window.addEventListener('wheel', (e) =>{
+    actions.mouseWheelDir = e.deltaY < 0 ? 'up' : 'down';
+    actions.mouseMove = e.deltaY;
+})
 
 window.addEventListener('beforeunload', (e) => {
     for (let i = 0; i < changedData.length; i++){
@@ -584,10 +691,10 @@ window.electron.receive('close-app', () => {
 })
 
 window.electron.receive('load-data', (save) => {
-    savableData[save.type] = save.data;
-    loadStatus[save.type] = true;
+    savableData[save.path] = save.data;
+    loadStatus[save.path] = true;
 
-    if (save.type.includes('session')) loadSessionTimes(save.data);
+    if (save.data.fileLoc == 'sessions') loadSessionTimes(save.data);
 
     if (!actions.appLoaded){
         if (checkForRequiredLoaded()){
@@ -605,12 +712,11 @@ function createSession(data = {}){
     let session = {
         id: numberOfSessions,
         name: '',
-        bestTimes: {},
         puzzle: data.puzzle,
         mode: data.mode,
     }
+    loadData('session'+session.id, {isSession: true, fileLoc: 'sessions'});
     currentSession = session;
-    console.log(currentSession);
     numberOfSessions++;
     mainData.numberOfAllSessions = numberOfSessions;
     
@@ -623,38 +729,37 @@ function createSession(data = {}){
 }
 
 function getSessionName(){
-    if (!currentSession.id) return false;
+    if (!currentSession.id && currentSession.id !== 0) return false;
     let name = 'session'+currentSession.id;
     return name;
 }
 
 function loadSessionTimes(data){
-    console.log(data);
+    if (!data.arr) data.arr = [];
     timesData = data.arr;
     loadTimesDiv();
     calculateMean();
+    calculateAo();
 }
 
 function loadSession(sessionID){
     if ((sessionID === undefined || sessionID === null) && currentSession.id === undefined) return;
 
-    if (sessionID && sessionID !== currentSession.id){
+    if (sessionID+1 && sessionID !== currentSession.id){
         // gets the data of session with this id
         
         currentSession.id = sessionID;
 
         let name = getSessionName();
 
-        if (name) loadData(name, {isSession: true});
+        if (name) loadData(name, {isSession: true, fileLoc: 'sessions'});
     }
-
-    if (savableData.mainData.session) delete savableData.mainData.session;
 
     if (savableData.mainData.sessionID != currentSession.id) {
         savableData.mainData.sessionID =  currentSession.id;
         markAsChanged('mainData');
     }
-    console.log('here')
+    actions.currentSession = getCurrentSession();
     getNewScramble(options.currentPuzzle);
 }
 
@@ -671,15 +776,16 @@ function updateProgressWindow(){
 
 function checkForRequiredLoaded(){
     for (let i = 0; i < requriedToStart.length; i++){
-        let name = requriedToStart[i];
-        if (!loadStatus[name]) return false;
+        let file = requriedToStart[i];
+        if (!loadStatus[file.name]) return false;
     }
     return true;
 }
 
 for (let i = 0; i < requriedToStart.length; i++){
-    let name = requriedToStart[i];
-    loadData(name);
+    let file = requriedToStart[i];
+    let data = file.data;
+    loadData(file.name, data);
 }
 
 function loadApp(){
@@ -694,11 +800,11 @@ function loadApp(){
 
     let mainData = savableData.mainData;
 
-    if (mainData.location){
+    if (mainData.location && mainData.sessionID+1){
         loadSession(mainData.sessionID);
+        console.log('session id %d loaded', mainData.sessionID);
     }
-    console.log(mainData.sessionID);
-    if (!mainData.sessionID) createSession({puzzle: '2x2', mode: 'classic'});
+    if (mainData.sessionID === undefined || mainData.sessionID == null) createSession({puzzle: '2x2', mode: 'classic'});
     // simulateTimerStop();
     mainLoop();
 

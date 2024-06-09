@@ -49,6 +49,7 @@ body{
 }
 .timer_info{
     font-size: 3vw;
+    color: #2495f1;
 }
 #overlay{
     position: fixed;
@@ -56,6 +57,7 @@ body{
     left: 0px;
     width: 100vw;
     height: 100vh;
+    pointer-events: none;
 }
 #session_times{
     position: absolute;
@@ -124,6 +126,7 @@ body{
     text-align: center;
     font-size: 3vw;
     color: #2495f1;
+    pointer-events: all;
 }
 #times_content{
     overflow-y: auto;
@@ -131,6 +134,9 @@ body{
     max-height: 100%;
     pointer-events: all;
     width: 95%;
+}
+#times_content_mover{
+    pointer-events: none;
 }
 #times_content::-webkit-scrollbar{
     display: none;
@@ -144,6 +150,7 @@ body{
     padding: 5px;
     width: 25%;
     text-align: center;
+    background-color: #362910;
 }
 #scramble-left{
     width: 15vw;
@@ -169,6 +176,10 @@ body{
 .times_timelabel{
     display: flex;
     width: 100%;
+}
+.times_solveNum{
+    /* background-color: var(--background-darker); */
+    color: #2495f1;
 }
 .time_row{
     width: 25%;
@@ -333,6 +344,10 @@ body{
 }
 #loadProgress{
     font-size: 6vw;
+}
+#mean_number_of_solves{
+    font-size: 1.8vw;
+    color: #2495f1;
 }
 @media only screen and (max-width: 1200px){
     #scramble{
