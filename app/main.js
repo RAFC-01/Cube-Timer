@@ -1,9 +1,10 @@
 // 0.1 alpha - first version and start of the app
 // 0.2 alpha - saving data (best only for now), timer mode typing
+// 0.3 alpha - saving whole sessions, highlighting best times of the session
 
 const appTitle = 'Cube Timer';
 
-const version = '0.2 alpha';
+const version = '0.3 alpha';
 
 document.title = appTitle + ' - version ' + version;
 
@@ -28,7 +29,6 @@ let loadProgess = 0;
 const pressedKeys = {};
 
 const options = {
-    timerMode: 'space',
     timerFps: 25,
     currentPuzzle: '2x2',
     maxVisibleTimes: 40 
@@ -62,7 +62,12 @@ const elements = {
     session_ao12: document.querySelector('#records_ao12 > div:nth-child(2)'),
     allTime_ao12: document.querySelector('#records_ao12 > div:nth-child(3)'),
     loadScreen: document.getElementById('loadScreen'),
-    mean_number_of_solves: document.getElementById('mean_number_of_solves')
+    mean_number_of_solves: document.getElementById('mean_number_of_solves'),
+    custom_popup: document.getElementById('custom_popup'), 
+    notification: document.getElementById('notification'),
+    n_single: document.getElementById('n_single'), 
+    n_ao5: document.getElementById('n_ao5'), 
+    n_ao12: document.getElementById('n_ao12'), 
 }
 
 let allTimeBest = {
@@ -84,11 +89,12 @@ const actions = {
         ao12: 0
     },
     currentSession: 0,
+    notificationIter: 0,
 }
 
 function mainLoop(){
     requestAnimationFrame(mainLoop);
-    if (options.timerMode == 'space'){
+    if (savableData.mainData.timerMode == 'space'){
         if (actions.timerStarted){
             let now = Date.now();
             let time = now - actions.timeSinceStarted;    
@@ -118,6 +124,38 @@ function mainLoop(){
     }
 }
 
+function loadMakeSureDeleteMessage(){
+    if (!timesData.length) return;
+    elements.popup_box.style.display = 'flex';
+    let content = `
+        <div id='popup_close_btn' class='close'></div>
+        <div id='popup_content'>
+            <div id='popup_question'>Are you sure you what to delete all times from this session?</div>
+        </div>
+        <div id='popup_buttons'>
+            <div id='popup_ok_btn' class='popup_btn ok_btn'>Cancel</div>
+            <div id='popup_remove_btn' class='popup_btn remove_btn' data-type='all_times'>Remove</div>
+        </div>
+    `
+    elements.popup.innerHTML = content;
+}
+function removeAllSessionTimes(){
+    let session = getSessionName();
+    console.log(session);
+    savableData[session].arr = [];
+    timesData = savableData[session].arr; // keep the reference to variable
+    currentAo5 = 0;
+    currentAo12 = 0;
+    actions.sessionBest = {
+        single: 0,
+        ao5: 0,
+        ao12: 0
+    }
+    actions.thisSessionScrambles = {};
+    elements.times_content.innerHTML = '';
+    zeroSessionTimeFields();
+    markAsChanged(session);
+}
 function loadPopUp(data){
     elements.popup_box.style.display = 'flex';
     actions.popupOpened = true;
@@ -126,6 +164,7 @@ function loadPopUp(data){
 
     let hour = date.getHours();
     let minutes = date.getMinutes();
+    let seconds = date.getSeconds(); 
 
     if (hour < 10) hour = "0" + hour;
     if (minutes < 10) minutes = "0" + minutes;
@@ -137,14 +176,15 @@ function loadPopUp(data){
     if (day < 10) day = "0" + day;
     if (month < 10) month = "0" + month;
 
-    let formatedDate = hour + ':' + minutes + " - " + day + "/" + month + "/" + year; 
+    let specificTime = hour + ':' + minutes + ':' +seconds;
+    let formatedDate = `<span title="${specificTime}">${hour}:${minutes}</span> - ${day}/${month}/${year}`; 
     let content = '';
     if (data.type == 'single'){
         content = `
             <div id='popup_date'>Solve date: ${formatedDate}</div>
             <div id='popup_close_btn' class='close'></div>
             <div id='popup_content'>
-                <div id='popup_time'>${convertMilisToTime(data.time)}</div>
+                <div id='popup_time'>${convertMilisToTime(data.time, true)}</div>
                 <div id='popup_scramble'>${data.scramble}</div>
             </div>
             <div id='popup_buttons'>
@@ -256,6 +296,7 @@ function startTimer(){
     }
 
     if (actions.popupOpened) closePopUp();
+    if (actions.notificationShown) stopNotifination();
 
     actions.timeSinceStarted = Date.now();
     elements.time.style.color = 'white';
@@ -266,21 +307,21 @@ function stopTimer(){
     if (!actions.timerStarted) return;
     actions.timerStarted = false;
     actions.justStopped = true;
-    elements.time.innerText = convertMilisToTime(currentTime);
-    console.log('stop');
+    if (savableData.mainData.timerMode != 'type') elements.time.innerText = convertMilisToTime(currentTime);
     timerDivResetStyles();
     // save time
 
     solvesDoneSinceSave++;
+    let notifySingle = actions.sessionBest.single;
+    let notifyAvg5 = actions.sessionBest.ao5;
+    let notifyAvg12 = actions.sessionBest.ao12;
 
     let timeData = {
         time: currentTime,
         scramble: actions.lastGeneratedScramble,
-        solveDate: Date.now()
+        solveDate: Date.now(),
     }
 
-    updateBestSingle(timeData);
-    
     if (currentSession){
         let sessionName = getSessionName();
         if (!savableData[sessionName]) savableData[sessionName] = { check: true, arr: []};
@@ -291,12 +332,44 @@ function stopTimer(){
         timesData.push(timeData);
     }
 
+    let data = {time: currentTime};
+
+    let newSingle = updateBestSingle({time: currentTime});
+    // new best single signals
+    if (newSingle.session && notifySingle){
+        elements.n_single.style.display = 'block';
+        elements.notification.style.display = 'block';
+        actions.notificationShown = true;
+        data.newSingle = true;
+    }
+    if (newSingle.all) console.log('new single all');
+
+    let newAvgs = calculateAo();
+    // new avg singnals
+    if (newAvgs.ao5.session && notifyAvg5){
+        elements.n_ao5.style.display = 'block';
+        elements.notification.style.display = 'block';
+        actions.notificationShown = true;
+        data.newAo5 = true;
+    }
+    if (newAvgs.ao5.all) console.log('new all ao5');
+    if (newAvgs.ao12.session && notifyAvg12){
+        elements.n_ao12.style.display = 'block';
+        elements.notification.style.display = 'block';
+        actions.notificationShown = true;
+        data.newAo12 = true;
+    }
+    if (newAvgs.ao12.all) console.log('new all ao12');
+
     // addToAllSolves(timeData, options.currentPuzzle);
 
-    calculateAo();
+    if (data.newSingle && data.newAo5 && data.newAo12){
+        // [A] tripple muffin
+    }
+
     calculateMean();
     
-    addTimesDiv(currentTime);
+    addTimesDiv(data);
 
     getNewScramble();
 }
@@ -342,41 +415,50 @@ function getCurrentSession(){
     }
 }
 function updateBestSingle(data){
+    let newBest = {'session': false, 'all': false};
     let time = data.time;
     if (time < actions.sessionBest.single.time || actions.sessionBest.single == 0){
         actions.sessionBest.single = data;
         elements.session_single.innerText = convertMilisToTime(time);
+        newBest['session'] = true;
     }
     if (time < allTimeBest.single.time || allTimeBest.single == 0){
         allTimeBest.single = data;
         elements.allTime_single.innerText = convertMilisToTime(time);
-
+        newBest['all'] = true;
     } 
-
+    return newBest;
 }
 function updateBestAo5(data = {}){
+    let newBest = {'session': false, 'all': false};
     let time = data.time;
     if (time < actions.sessionBest.ao5.time || actions.sessionBest.ao5 == 0){
         actions.sessionBest.ao5 = data;
         elements.session_ao5.innerText = convertMilisToTime(time);
+        newBest['session'] = true;
     }
     if (time < allTimeBest.ao5.time || allTimeBest.ao5 == 0){
         allTimeBest.ao5 = data;
         elements.allTime_ao5.innerText = convertMilisToTime(time);
-
-    }     
+        newBest['all'] = true;
+    }   
+    return newBest;  
 }
 
 function updateBestAo12(data = {}){
+    let newBest = {'session': false, 'all': false};
     let time = data.time;
     if (time < actions.sessionBest.ao12.time || actions.sessionBest.ao12 == 0){
         actions.sessionBest.ao12 = data;
         elements.session_ao12.innerText = convertMilisToTime(time);
+        newBest['session'] = true;
     }
     if (time < allTimeBest.ao12.time || allTimeBest.ao12 == 0){
         allTimeBest.ao12 = data;
         elements.allTime_ao12.innerText = convertMilisToTime(time);
+        newBest['all'] = true;
     }         
+    return newBest;
 } 
 
 function loadData(path, data = {}){
@@ -401,7 +483,7 @@ function getAo(number, index){
     let solves = [];
 
     let start = index ? index : timesData.length;
-    
+
     for (let i = 0; i < number; i++){
         let time = timesData[start - 1 - i].time;
         let scramble = timesData[start - 1 - i].scramble;
@@ -416,6 +498,16 @@ function getAo(number, index){
 
     return {time: getAverage(times), solves: solves};
 }
+
+function zeroSessionTimeFields(){
+    elements.mean_number.innerText = '.....';
+    elements.mean_number_of_solves.innerText = '';
+    elements.session_single.innerText = '-';
+    elements.session_ao5.innerText = '-';
+    elements.session_ao12.innerText = '-';
+    elements.timer_ao5_number.innerText = '-';
+    elements.timer_ao12_number.innerText = '-';
+}   
 
 function calculateMean(){
     // of all solves
@@ -445,20 +537,35 @@ function getAvgAtIndex(index = 0){
     return avgs;
 }
 function calculateAo(){
+    let newAvgs = {
+        ao5: {
+            session: false,
+            all: false,
+        },
+        ao12: {
+            session: false,
+            all: false
+        }
+    }
     if (timesData.length > 4){
         let timeData = getAo(5) 
         currentAo5 = timeData.time;
-        updateBestAo5(timeData);
+        let newBest = updateBestAo5(timeData);
         elements.timer_ao5_number.innerText = convertMilisToTime(currentAo5);
         elements.timer_ao5_number.classList.add('hover_highlight');
+        if (newBest.session) newAvgs.ao5.session = true;
+        if (newBest.all) newAvgs.ao5.all = true;
     }
     if (timesData.length > 11){
         let timeData = getAo(12); 
         currentAo12 = timeData.time;
-        updateBestAo12(timeData);
+        let newBest = updateBestAo12(timeData);
         elements.timer_ao12_number.innerText = convertMilisToTime(currentAo12);
         elements.timer_ao12_number.classList.add('hover_highlight');
+        if (newBest.session) newAvgs.ao12.session = true;
+        if (newBest.all) newAvgs.ao12.all = true;
     }
+    return newAvgs;
 }
 
 
@@ -474,9 +581,11 @@ function simulateTimerStop(){
     // loadPopUp(data);
 }
 
-function addTimesDiv(time){
-    if (elements.times_content.children[0].data.index > timesData.length - 5){
-        elements.times_content.insertBefore(getTimeLabelDiv({time: time}), elements.times_content.firstChild);
+function addTimesDiv(data){
+    if (!elements.times_content.childNodes.length || elements.times_content.childNodes[0].dataset.index > timesData.length - 5){
+        elements.times_content.insertBefore(getTimeLabelDiv(data), elements.times_content.firstChild);
+    }else{
+        elements.times_content.scrollTop -= 33;
     }
 }
 
@@ -494,15 +603,18 @@ function getTimeLabelDiv(data){
     
     delete data.avgs;
 
+    let newSingleClass = data.newSingle ? 'newRecord_time' : '';
+    let newAvg5Class = data.newAo5 ? 'newRecord_time' : '';
+    let newAvg12Class = data.newAo12 ? 'newRecord_time' : '';
+
     let div = document.createElement('div');
     div.className = 'times_timelabel';
     div.dataset.index = number - 1;
-
     div.innerHTML = `
         <div class='times_solveNum time_row'>${number}</div>
-        <div class='times_time time_row hover_highlight'>${solveTime}</div>
-        <div class='times_ao5 time_row ${ao5 != '-' ? 'hover_highlight' : ''}'>${ao5}</div>
-        <div class='times_ao12 time_row ${ao12 != '-' ? 'hover_highlight' : ''}'>${ao12}</div>
+        <div class='times_time time_row hover_highlight ${newSingleClass}'>${solveTime}</div>
+        <div class='${newAvg5Class} times_ao5 time_row ${ao5 != '-' ? 'hover_highlight' : ''}'>${ao5}</div>
+        <div class='${newAvg12Class} times_ao12 time_row ${ao12 != '-' ? 'hover_highlight' : ''}'>${ao12}</div>
     `;
 
     return div;
@@ -531,9 +643,8 @@ function loadTimesDiv(){
     for (let i = timesData.length-1; i >= end; i--){
         let data = timesData[i];
         data.number = i + 1;
-        updateBestSingle(data);
         data.avgs = getAvgAtIndex(i+1);
-        content += `<div class='times_timelabel' data-index='${data.number}'>${getTimeLabelDiv(data).innerHTML}</div>`;
+        content += `<div class='times_timelabel' data-index='${i}'>${getTimeLabelDiv(data).innerHTML}</div>`;
     }
     elements.times_content.innerHTML = content;
 }
@@ -547,11 +658,10 @@ function timerDivRunningStyles(){
 
 }
 function timerDivResetStyles(){
-    console.log('change styles');
     elements.time.style.fontSize = '6vw';
     elements.timer_hidable.style.display = 'block';
     elements.timer_info.style.display = 'block';
-    elements.overlay.style.display = 'block';
+    elements.overlay.style.display = 'flex';
     elements.timer_left.style.display = 'block';
 }
 
@@ -563,7 +673,7 @@ function convertMilisToTime(milis, getLong = false){
     minutes = Math.floor(milis / 1000 / 60);
     secs = Math.floor(milis / 1000 ) % 60;
     ms = milis % 1000;
-    ms = ms < 100 && ms > 10 ? '0'+ms : ms;
+    ms = ms < 100 && ms >= 10 ? '0'+ms : ms;
     ms = ms < 10 ? '00'+ms : ms;
 
     if (minutes > 0 && secs < 10) secs = '0' + secs;
@@ -588,7 +698,7 @@ document.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     pressedKeys[key] = 1;
 
-    if (key == ' '){
+    if (key == ' ' && savableData.mainData && savableData.mainData.timerMode == 'space'){
         if (!actions.spacePressTime) actions.spacePressTime = Date.now();
         stopTimer();
     }
@@ -606,6 +716,20 @@ document.addEventListener('keyup', (e) => {
     delete pressedKeys[key];
 });
 
+function stopNotifination(){
+    actions.notificationShown = false;
+    actions.notificationIter = 0;
+    elements.n_single.style.display = 'none';
+    elements.n_ao5.style.display = 'none';
+    elements.n_ao12.style.display = 'none';
+    elements.notification.style.display = 'none';
+}
+document.querySelector('#notification > div').addEventListener('animationiteration' , (e)=> {
+    actions.notificationIter++;
+    if (actions.notificationShown && actions.notificationIter > 2){
+        stopNotifination();
+    } 
+})
 document.addEventListener('mousedown', (e) => {
     let t = e.target;
     if (actions.popupOpened && !t.id.includes('popup')){
@@ -614,9 +738,19 @@ document.addEventListener('mousedown', (e) => {
     if (t.id == 'popup_close_btn' || t.id == 'popup_ok_btn'){
         closePopUp();
     }
+    if (t.id == 'mean_button'){
+        loadMakeSureDeleteMessage();
+    }
+    if (t.id =='popup_remove_btn'){
+        let type = t.dataset.type;
+        if (type == 'all_times'){
+            removeAllSessionTimes();
+            closePopUp();
+        }
+    }
     if (t.classList.contains('times_time')){
         let index = t.parentElement.dataset.index;
-        let data = timesData[index - 1];
+        let data = timesData[index];
 
         data.type = 'single';
 
@@ -632,12 +766,14 @@ function markAsChanged(data){
 function saveData(path){
     if (!loadStatus[path] || !savableData[path].check) return;
     if (!savableData[path].path) savableData[path].path = path;
+    console.log('call');
     let fileLocation = savableData[path].fileLoc;
     let fileInfo = {
         path: path,
         fileLoc: fileLocation,
         file: savableData[path]
     }
+    loadStatus[path] = false;
     window.electron.send('save-data', fileInfo);
 }
 
@@ -646,10 +782,9 @@ elements.times_content.addEventListener('scroll', (e)=> {
     // e.preventDefault();
     let top = elements.times_content.scrollTop; 
     let time_c = elements.times_content;
-    let itemHeight = time_c.children[0].offsetHeight;
+    let itemHeight = time_c.children ? time_c.children[0].offsetHeight : 0;
     let times_children = time_c.childNodes;
     let dir = actions.mouseWheelDir;
-    let speed = actions.mouseMove;
     if (top > itemHeight*4 && dir == 'down') {
         let newIndex = parseInt(times_children[times_children.length - 1].dataset.index);
         if (!newIndex || newIndex < 0) return;
@@ -734,9 +869,17 @@ function getSessionName(){
     return name;
 }
 
+function loadAllRecords(){
+    for (let i = 0; i < timesData.length; i++){
+        getAvgAtIndex(i);
+        updateBestSingle({time: timesData[i].time});
+    }
+}
+
 function loadSessionTimes(data){
     if (!data.arr) data.arr = [];
     timesData = data.arr;
+    loadAllRecords();
     loadTimesDiv();
     calculateMean();
     calculateAo();
@@ -787,11 +930,33 @@ for (let i = 0; i < requriedToStart.length; i++){
     let data = file.data;
     loadData(file.name, data);
 }
+function changeTimerMode(newMode){
+    savableData.mainData.timerMode = newMode;
+    markAsChanged('mainData');
+}
+function loadTimerTypeMode(){
+    elements.time.innerHTML = `
+    <div id='timer_textfield'>
+        <input id='timer_time_input' type='number' />
+    </div>`;
+
+    elements.timer_time_input = document.getElementById('timer_time_input');
+    elements.timer_time_input.addEventListener('keypress', (e) => {
+        if (e.key == "Enter"){
+            actions.timerStarted = true;
+            if (!e.target.value) return;
+            currentTime = e.target.value * 10;
+            stopTimer();
+            e.target.value = '';
+        }
+    });    
+}
 
 function loadApp(){
     if (actions.appLoaded) return;
     elements.loadScreen.style.display = 'none';
     savableData.mainData.location = 'classic';
+    if (!savableData.mainData.timerMode) savableData.mainData.timerMode = 'space'; 
     if (savableData.mainData.appVersion != version){
         savableData.mainData.appVersion = version;
         console.log('app updated!');
@@ -799,6 +964,8 @@ function loadApp(){
     }
 
     let mainData = savableData.mainData;
+
+    if (mainData.timerMode == 'type') loadTimerTypeMode();
 
     if (mainData.location && mainData.sessionID+1){
         loadSession(mainData.sessionID);
@@ -810,3 +977,4 @@ function loadApp(){
 
     actions.appLoaded = true;
 }
+loadMakeSureDeleteMessage();
