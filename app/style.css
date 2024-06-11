@@ -2,6 +2,7 @@
     --background-dark: #161616;
     --background-light: #252525;
     --font-color: #a5a5a5;
+    --font-need-color: #99670b;
     --background-darker: #1b1b1b;
     --ready-color: green;
     --left-size-min-width: 250px;
@@ -64,6 +65,10 @@ input[type="number"]::-webkit-outer-spin-button{
 #timer_time{
     /* font-family: '8dg'; */
     background-color: transparent;
+}
+.timer_need{
+    font-size: 1.5vw;
+    color:var(--font-need-color);
 }
 .timer_info{
     font-size: 3vw;
@@ -245,6 +250,7 @@ input[type="number"]::-webkit-outer-spin-button{
 #popup{
     pointer-events: all;
     width: 50vw;
+    max-width: 600px;
     aspect-ratio: 16 / 9;
     background-color: var(--background-darker);
     border: 2px solid#2495f1; 
@@ -306,7 +312,8 @@ input[type="number"]::-webkit-outer-spin-button{
     padding: 10px 15px;
     border: 2px solid var(--font-color);
     border-radius: 30px;
-    min-width: 10vw;
+    width: 10vw;
+    max-width: 200px;
     text-align: center;
     text-transform: uppercase;
     cursor: pointer;
@@ -351,7 +358,7 @@ input[type="number"]::-webkit-outer-spin-button{
     position: absolute;
     left: 15px;
     content: ' ';
-    height: 3.5vw;
+    height: 100%;
     width: 4px;
     background-color: var(--font-color);
   }
@@ -398,6 +405,7 @@ input[type="number"]::-webkit-outer-spin-button{
     color: var(--background-dark);
     text-transform: uppercase;
     height: 3vw;
+    overflow: hidden;
     display: none;
 }
 @keyframes scrollEffect{
@@ -416,6 +424,17 @@ input[type="number"]::-webkit-outer-spin-button{
 }
 .newRecord_time{
     color: red;
+}
+@media screen and (min-width: 1200px) {
+    #popup_content{
+        font-size: 32px;
+    }
+    #popup_question{
+        font-size: 30px;
+    }
+    #popup_buttons{
+        font-size: 19.2px;
+    }
 }
 @media screen and (min-width: 1600px) {
     #mean_title {

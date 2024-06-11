@@ -1,7 +1,7 @@
 // 0.1 alpha - first version and start of the app
 // 0.2 alpha - saving data (best only for now), timer mode typing
 // 0.3 alpha - saving whole sessions, highlighting best times of the session
-
+// 0.4 alpha - deleting times, swiching sessions
 const appTitle = 'Cube Timer';
 
 const version = '0.3 alpha';
@@ -68,6 +68,8 @@ const elements = {
     n_single: document.getElementById('n_single'), 
     n_ao5: document.getElementById('n_ao5'), 
     n_ao12: document.getElementById('n_ao12'), 
+    timer_need_ao5: document.getElementById('timer_need_ao5'),
+    timer_need_ao12: document.getElementById('timer_need_ao12'),
 }
 
 let allTimeBest = {
@@ -136,7 +138,7 @@ function loadMakeSureDeleteMessage(){
             <div id='popup_ok_btn' class='popup_btn ok_btn'>Cancel</div>
             <div id='popup_remove_btn' class='popup_btn remove_btn' data-type='all_times'>Remove</div>
         </div>
-    `
+    `;
     elements.popup.innerHTML = content;
 }
 function removeAllSessionTimes(){
@@ -208,6 +210,51 @@ function getNewScramble(puzzle = options.currentPuzzle){
 
     elements.scramble_string.innerText = scramble;
 
+}
+
+function getTimeNeededForNewAvgs(){
+    if (timesData.length < 4 || !actions.sessionBest.ao5 && !actions.sessionBest.ao12) return;
+    let desiredAo5 = actions.sessionBest.ao5.time || 0;
+    let desiredAo12 = actions.sessionBest.ao12.time || 0;
+    let sum = {
+        4: 0,
+        11: 0,
+    }
+    let hightest = {
+        4: 0,
+        11: 0,
+    }
+    let lowest = {
+        4: 0,
+        11: 0
+    }
+    let end =  timesData.length > 10 ? timesData.length - 11 : timesData.length - 4; 
+    for (let i = timesData.length-1; i >= end; i--){
+        let t = timesData[i].time;
+        if (i > timesData.length - 5){
+            // console.log(i);
+            console.log('add');
+            sum[4] += t;
+            if (t > hightest[4]) hightest[4] = t;
+            if (t < lowest[4] || lowest[4] == 0) lowest[4] = t;
+        }
+        if (timesData.length > 11){
+            sum[11] += t;
+            if (t > hightest[11]) hightest[11] = t;
+            if (t < lowest[11] || lowest[11] == 0) lowest[11] = t;
+        }
+    }
+
+    let timeAo5 = (desiredAo5-1) * 3 + hightest[4] + lowest[4] - sum[4];
+    let timeAo12 = (desiredAo12-1) * 10 + hightest[11] + lowest[11] - sum[11];
+    if (timeAo5 < lowest[4] || timeAo5 > hightest[4]) timeAo5 = false;
+    if (timeAo12 < lowest[11] || timeAo12 > hightest[11]) timeAo12 = false;
+
+    let requiredTimes = {
+        ao5: timeAo5,
+        ao12: timeAo12
+    }
+    return requiredTimes;
 }
 
 function generateScramble(puzzle, length = 9){
@@ -332,15 +379,18 @@ function stopTimer(){
         timesData.push(timeData);
     }
 
-    let data = {time: currentTime};
 
     let newSingle = updateBestSingle({time: currentTime});
     // new best single signals
+    elements.n_single.style.display = 'none';
+    elements.n_ao5.style.display = 'none';
+    elements.n_ao12.style.display = 'none';
+
     if (newSingle.session && notifySingle){
         elements.n_single.style.display = 'block';
         elements.notification.style.display = 'block';
         actions.notificationShown = true;
-        data.newSingle = true;
+        actions.notificationIter = 0;
     }
     if (newSingle.all) console.log('new single all');
 
@@ -350,25 +400,30 @@ function stopTimer(){
         elements.n_ao5.style.display = 'block';
         elements.notification.style.display = 'block';
         actions.notificationShown = true;
-        data.newAo5 = true;
+        actions.notificationIter = 0;
     }
     if (newAvgs.ao5.all) console.log('new all ao5');
     if (newAvgs.ao12.session && notifyAvg12){
         elements.n_ao12.style.display = 'block';
         elements.notification.style.display = 'block';
         actions.notificationShown = true;
-        data.newAo12 = true;
+        actions.notificationIter = 0;
     }
     if (newAvgs.ao12.all) console.log('new all ao12');
 
-    // addToAllSolves(timeData, options.currentPuzzle);
-
-    if (data.newSingle && data.newAo5 && data.newAo12){
-        // [A] tripple muffin
-    }
+    updateNeedTimes();
 
     calculateMean();
     
+    let data = {time: currentTime, newTimes: {
+        single: newSingle.session,
+        ao5: newAvgs.ao5.session,
+        ao12: newAvgs.ao12.session,
+    }};
+
+    if (data.newSingle && data.newAo5 && data.newAo12){
+        // feature: [A] tripple muffin
+    }
     addTimesDiv(data);
 
     getNewScramble();
@@ -413,6 +468,7 @@ function getCurrentSession(){
         let s = savableData.mainData.sessions[i];
         if (s.id == currentSession.id) return s;
     }
+    return false;
 }
 function updateBestSingle(data){
     let newBest = {'session': false, 'all': false};
@@ -472,7 +528,7 @@ function getAverage(arr){
         let t = arr[i].time ? arr[i].time : arr[i];
         sum += t;
     }
-    return Math.floor(sum / arr.length);
+    return Math.round(sum / arr.length);
 }
 
 function getAo(number, index){
@@ -482,11 +538,11 @@ function getAo(number, index){
     let times = [];
     let solves = [];
 
-    let start = index ? index : timesData.length;
+    let start = index ? index : timesData.length - 1;
 
     for (let i = 0; i < number; i++){
-        let time = timesData[start - 1 - i].time;
-        let scramble = timesData[start - 1 - i].scramble;
+        let time = timesData[start - i].time;
+        let scramble = timesData[start - i].scramble;
         if (biggest < time) biggest = time;
         if (smallest > time) smallest = time;
         times.push(time);
@@ -507,34 +563,53 @@ function zeroSessionTimeFields(){
     elements.session_ao12.innerText = '-';
     elements.timer_ao5_number.innerText = '-';
     elements.timer_ao12_number.innerText = '-';
+    updateNeedTimes();
 }   
 
 function calculateMean(){
     // of all solves
-    if (!timesData.length) return;
+    if (!timesData.length) {
+        elements.mean_number.innerText = '.....';
+        return
+    };
     let mean = getAverage(timesData);
     if (mean != 0){
         elements.mean_number.innerText = convertMilisToTime(mean, true); 
     }else{
-        elements.mean_number.innerText = '-';
+        elements.mean_number.innerText = '.....';
     }
-    elements.mean_number_of_solves.innerText = ' (' + timesData.length + ') ';
+    elements.mean_number_of_solves.innerText = ' (' + timesData.length + ')';
 
 }
 function getAvgAtIndex(index = 0){
+    let newAvgs = {
+        ao5: {
+            session: false,
+            all: false,
+        },
+        ao12: {
+            session: false,
+            all: false
+        }
+    }
     let avgs = {};
-    if (index > 4){
+    if (index >= 4){
         let ao5 = getAo(5, index);
-        avgs['ao5'] = ao5.time;         
-        updateBestAo5(ao5);
+        avgs['ao5'] = ao5.time;   
+        let newBest = updateBestAo5(ao5);
+        if (newBest.session) newAvgs.ao5.session = true;
+        if (newBest.all) newAvgs.ao5.all = true;
     } 
-    if (index > 11){
+    if (index >= 11){
         let ao12 =  getAo(12, index)
         avgs['ao12'] = ao12.time;
-        updateBestAo12(ao12);
+        let newBest = updateBestAo12(ao12);
+        if (newBest.session) newAvgs.ao12.session = true;
+        if (newBest.all) newAvgs.ao12.all = true;
+
     } 
 
-    return avgs;
+    return [avgs, newAvgs];
 }
 function calculateAo(){
     let newAvgs = {
@@ -570,8 +645,8 @@ function calculateAo(){
 
 
 
-function simulateTimerStop(){
-    currentTime = 50;
+function simulateTimerStop(time = 50){
+    currentTime = time;
     actions.timerStarted = true;
     stopTimer();
 
@@ -601,11 +676,17 @@ function getTimeLabelDiv(data){
 
     let number = data.number ? data.number : timesData.length;
     
-    delete data.avgs;
+    if (!data.newTimes) data.newTimes = {};
+    
+    // console.trace(data.newTimes);
 
-    let newSingleClass = data.newSingle ? 'newRecord_time' : '';
-    let newAvg5Class = data.newAo5 ? 'newRecord_time' : '';
-    let newAvg12Class = data.newAo12 ? 'newRecord_time' : '';
+    let newSingleClass = data.newTimes.single ? 'newRecord_time' : '';
+    let newAvg5Class = data.newTimes.ao5 ? 'newRecord_time' : '';
+    let newAvg12Class = data.newTimes.ao12 ? 'newRecord_time' : '';
+    
+    //delete stuff so its not saved
+    delete data.avgs; 
+    delete data.newTimes;
 
     let div = document.createElement('div');
     div.className = 'times_timelabel';
@@ -623,7 +704,7 @@ function getTimeLabelDiv(data){
 function addLabelBefore(index){
     let data = timesData[index];
     data.number = index+1;
-    data.avgs = getAvgAtIndex(index);
+    data.avgs = getAvgAtIndex(index)[0];
     let label = getTimeLabelDiv(data);
 
     elements.times_content.insertBefore(label, elements.times_content.firstChild);    
@@ -631,7 +712,7 @@ function addLabelBefore(index){
 function addLabelAfter(index){
     let data = timesData[index];
     data.number = index;
-    data.avgs = getAvgAtIndex(index + 1);
+    data.avgs = getAvgAtIndex(index + 1)[0];
     let label = getTimeLabelDiv(data);
 
     elements.times_content.appendChild(label);
@@ -643,7 +724,7 @@ function loadTimesDiv(){
     for (let i = timesData.length-1; i >= end; i--){
         let data = timesData[i];
         data.number = i + 1;
-        data.avgs = getAvgAtIndex(i+1);
+        data.avgs = getAvgAtIndex(i)[0];
         content += `<div class='times_timelabel' data-index='${i}'>${getTimeLabelDiv(data).innerHTML}</div>`;
     }
     elements.times_content.innerHTML = content;
@@ -782,7 +863,7 @@ elements.times_content.addEventListener('scroll', (e)=> {
     // e.preventDefault();
     let top = elements.times_content.scrollTop; 
     let time_c = elements.times_content;
-    let itemHeight = time_c.children ? time_c.children[0].offsetHeight : 0;
+    let itemHeight = time_c.children.length ? time_c.children[0].offsetHeight : 0;
     let times_children = time_c.childNodes;
     let dir = actions.mouseWheelDir;
     if (top > itemHeight*4 && dir == 'down') {
@@ -826,6 +907,11 @@ window.electron.receive('close-app', () => {
 })
 
 window.electron.receive('load-data', (save) => {
+    if (loadStatus[save.path]){
+        if (save.data.fileLoc == 'sessions') loadSessionTimes(savableData[save.path]);
+        return;
+    }
+
     savableData[save.path] = save.data;
     loadStatus[save.path] = true;
 
@@ -869,24 +955,81 @@ function getSessionName(){
     return name;
 }
 
+function removeTime(index){
+    if (index > timesData.length - 1) return;
+    timesData.splice(index, 1);
+    let div = document.querySelector(`.times_timelabel[data-index="${index}"]`);
+    let nodes = elements.times_content.childNodes;
+    console.log(nodes[nodes.length-1].dataset.index, index);
+    if (!nodes.length || nodes[0].dataset.index >= index && nodes[nodes.length-1].dataset.index <= index){ // if visible
+        console.log('here');
+        div.remove();
+    }else{
+        elements.times_content.scrollTop += 33;
+    }
+    calculateMean();
+    loadSession(actions.currentSession.id);
+    // updateLoadedDivs(index, -1);
+}
+function updateLoadedDivs(deletedIndex, ammout){
+    let nodes = elements.times_content.childNodes;
+    for (let i = 0; i < deletedIndex; i++){
+        let node = nodes[i];
+        let index = parseInt(node.dataset.index);
+        let newIndex = index + ammout;
+        node.dataset.index = newIndex;
+        node.childNodes[1].innerText = newIndex+ammout;
+    }
+}
+
 function loadAllRecords(){
     for (let i = 0; i < timesData.length; i++){
-        getAvgAtIndex(i);
-        updateBestSingle({time: timesData[i].time});
+        timesData[i].newTimes = {};
+        let newAvg = getAvgAtIndex(i)[1];
+        
+        let newBest = updateBestSingle({time: timesData[i].time});
+        timesData[i].newTimes = {
+            single: newBest.session,
+            ao5: newAvg.ao5.session,
+            ao12: newAvg.ao12.session,
+        };
     }
 }
 
 function loadSessionTimes(data){
     if (!data.arr) data.arr = [];
     timesData = data.arr;
+    zeroSessionTimeFields();
     loadAllRecords();
     loadTimesDiv();
     calculateMean();
     calculateAo();
+    updateNeedTimes();
+}
+function addTimes(num, time){
+    for (let i = 0; i < num; i++){
+        simulateTimerStop(time);
+    }
+}
+function addRandomTimes(num){
+    for (let i = 0; i < num; i++){
+        let time = Math.floor(Math.random() * 10000);
+        simulateTimerStop(time);
+    }
 }
 
 function loadSession(sessionID){
     if ((sessionID === undefined || sessionID === null) && currentSession.id === undefined) return;
+
+    currentTime = 0;
+    currentAo5 = 0;
+    currentAo12 = 0;
+
+    actions.sessionBest = {
+        single: 0,
+        ao5: 0,
+        ao12: 0
+    };
 
     if (sessionID+1 && sessionID !== currentSession.id){
         // gets the data of session with this id
@@ -944,12 +1087,28 @@ function loadTimerTypeMode(){
     elements.timer_time_input.addEventListener('keypress', (e) => {
         if (e.key == "Enter"){
             actions.timerStarted = true;
-            if (!e.target.value) return;
+            if (!e.target.value || e.target.value <= 0) return;
             currentTime = e.target.value * 10;
             stopTimer();
             e.target.value = '';
         }
     });    
+}
+
+function updateNeedTimes(){
+    let needText = '(You need ';
+    let times = getTimeNeededForNewAvgs();
+    if (!times){
+        elements.timer_need_ao5.innerText = '';
+        elements.timer_need_ao12.innerText = '';
+        return;
+    };
+
+    if (times.ao5) elements.timer_need_ao5.innerText = needText + convertMilisToTime(times.ao5) + ')';
+    else elements.timer_need_ao5.innerText = '';
+
+    if (times.ao12) elements.timer_need_ao12.innerText = needText + convertMilisToTime(times.ao12) + ')';
+    else elements.timer_need_ao12.innerText = '';
 }
 
 function loadApp(){
@@ -971,7 +1130,9 @@ function loadApp(){
         loadSession(mainData.sessionID);
         console.log('session id %d loaded', mainData.sessionID);
     }
-    if (mainData.sessionID === undefined || mainData.sessionID == null) createSession({puzzle: '2x2', mode: 'classic'});
+    if (!getCurrentSession()){
+        createSession({puzzle: '2x2', mode: 'classic'}); // FIXME: this is just for debug
+    }
     // simulateTimerStop();
     mainLoop();
 
