@@ -70,6 +70,10 @@ const elements = {
     n_ao12: document.getElementById('n_ao12'), 
     timer_need_ao5: document.getElementById('timer_need_ao5'),
     timer_need_ao12: document.getElementById('timer_need_ao12'),
+    info_current_puzzle: document.getElementById('info_current_puzzle'),
+    info_other_sessions: document.getElementById('info_other_sessions'),
+    window: document.getElementById('window'),
+    window_box: document.getElementById('window_box')
 }
 
 let allTimeBest = {
@@ -190,7 +194,7 @@ function loadPopUp(data){
                 <div id='popup_scramble'>${data.scramble}</div>
             </div>
             <div id='popup_buttons'>
-                <div id='popup_remove_btn' class='popup_btn remove_btn'>Remove</div>
+                <div id='popup_remove_btn' class='popup_btn remove_btn' data-index='${data.index}'>Remove</div>
                 <div id='popup_ok_btn' class='popup_btn ok_btn'>OK</div>
             </div>
         `;
@@ -202,7 +206,49 @@ function closePopUp(){
     actions.popupOpened = false;
     elements.popup_box.style.display = 'none';
 }
+function openWindow(content){
+    elements.window_box.style.display = 'flex';
+    elements.window.append(content);
+}
+function closeWindow(){
+    elements.window_box.style.display = 'flex';
+    setAllWindowsToFalse();
+}
+function loadSessionsWindow(){
+    if (actions.sessionWindowOpen) return;
+    let sessions = savableData.mainData.sessions;
+    let contentDiv = document.createElement('div');
+    contentDiv.id = 'sessions_window_content';
+    let content = '';
+    let thisSession = sessions[currentSession.id];
+    for (let i = 0; i < sessions.length; i++){
+        let session = sessions[i];
 
+        if (session.mode != thisSession.mode || session.puzzle != thisSession.puzzle) continue;
+        
+        let activeDiv = session.id == currentSession.id ? `<div class='session_active_card'>Active</div>` : '';
+
+        let name = session.name.length ? session.name : 'session '+session.id; 
+
+        content += `
+            <div class='session_card'>
+                <div style='pointer-events: none'>
+                    <div class='session_name_card'>"${name}"</div>
+                    <p>Mode: ${session.mode}</p>
+                    <p>puzzle: ${session.puzzle}</p>
+                    ${activeDiv}    
+                </div>
+            </div>            
+        `
+    }
+    contentDiv.innerHTML = content;
+    actions.sessionWindowOpen = true;
+    document.getElementById('window_title').innerHTML = 'Your sessions';
+    openWindow(contentDiv);
+}
+function setAllWindowsToFalse(){
+    actions.sessionWindowOpen = false;
+}
 function getNewScramble(puzzle = options.currentPuzzle){
     let scramble = generateScramble(puzzle);
 
@@ -669,8 +715,10 @@ function getTimeLabelDiv(data){
     let ao5 = currentAo5 > 0 ? convertMilisToTime(currentAo5) : '-';
     let ao12 = currentAo12 > 0 ? convertMilisToTime(currentAo12) : '-';
 
-    if (data.avgs && data.avgs['ao5']) ao5 = convertMilisToTime(data.avgs['ao5']);
-    if (data.avgs && data.avgs['ao12']) ao12 = convertMilisToTime(data.avgs['ao12']);
+    if (data.avgs){
+        ao5 = convertMilisToTime(data.avgs['ao5']);
+        ao12 = convertMilisToTime(data.avgs['ao12']);
+    } 
 
     if (solveTime.length > 6) document.documentElement.style.setProperty('--left-size-min-width', '300px');
 
@@ -686,7 +734,6 @@ function getTimeLabelDiv(data){
     
     //delete stuff so its not saved
     delete data.avgs; 
-    delete data.newTimes;
 
     let div = document.createElement('div');
     div.className = 'times_timelabel';
@@ -710,9 +757,9 @@ function addLabelBefore(index){
     elements.times_content.insertBefore(label, elements.times_content.firstChild);    
 }
 function addLabelAfter(index){
-    let data = timesData[index];
+    let data = timesData[index-1];
     data.number = index;
-    data.avgs = getAvgAtIndex(index + 1)[0];
+    data.avgs = getAvgAtIndex(index-1)[0];
     let label = getTimeLabelDiv(data);
 
     elements.times_content.appendChild(label);
@@ -748,6 +795,7 @@ function timerDivResetStyles(){
 
 function convertMilisToTime(milis, getLong = false){
     // milis += 3300000;
+    if (!milis) return '-';
     let minutes, secs, ms;
     let long = '';
     
@@ -783,6 +831,7 @@ document.addEventListener('keydown', (e) => {
         if (!actions.spacePressTime) actions.spacePressTime = Date.now();
         stopTimer();
     }
+    if (key == 'd') removeTime(0);
 });
 
 document.addEventListener('keyup', (e) => {
@@ -819,9 +868,15 @@ document.addEventListener('mousedown', (e) => {
     if (t.id == 'popup_close_btn' || t.id == 'popup_ok_btn'){
         closePopUp();
     }
+    if (t.id == 'popup_remove_btn'){
+        let index = t.dataset.index;
+        removeTime(index);
+        closePopUp();
+    }   
     if (t.id == 'mean_button'){
         loadMakeSureDeleteMessage();
     }
+    if (t.id == 'info_session_switch_btn') loadSessionsWindow();
     if (t.id =='popup_remove_btn'){
         let type = t.dataset.type;
         if (type == 'all_times'){
@@ -834,7 +889,7 @@ document.addEventListener('mousedown', (e) => {
         let data = timesData[index];
 
         data.type = 'single';
-
+        data.index = index;
         loadPopUp(data);
     }
 });   
@@ -958,31 +1013,69 @@ function getSessionName(){
 function removeTime(index){
     if (index > timesData.length - 1) return;
     timesData.splice(index, 1);
-    let div = document.querySelector(`.times_timelabel[data-index="${index}"]`);
-    let nodes = elements.times_content.childNodes;
-    console.log(nodes[nodes.length-1].dataset.index, index);
-    if (!nodes.length || nodes[0].dataset.index >= index && nodes[nodes.length-1].dataset.index <= index){ // if visible
-        console.log('here');
-        div.remove();
-    }else{
-        elements.times_content.scrollTop += 33;
+
+    let oldRecords = {
+        ao5: actions.sessionBest.ao5.time,
+        ao12: actions.sessionBest.ao12.time
     }
+    loadAllRecords();
     calculateMean();
-    loadSession(actions.currentSession.id);
-    // updateLoadedDivs(index, -1);
+    updateLoadedDivs();
+    updateNeedTimes();
+
+
+    if (oldRecords.ao5 > actions.sessionBest.ao5.time){
+        elements.n_ao5.style.display = 'block';
+        elements.notification.style.display = 'block';
+        actions.notificationShown = true;
+        actions.notificationIter = 0;
+    }
+    if (oldRecords.ao12 > actions.sessionBest.ao12.time){
+        elements.n_ao12.style.display = 'block';
+        elements.notification.style.display = 'block';
+        actions.notificationShown = true;
+        actions.notificationIter = 0;
+    }
+
+    let sessionName = getSessionName();
+    markAsChanged(sessionName);
 }
-function updateLoadedDivs(deletedIndex, ammout){
+function updateLoadedDivs(){
     let nodes = elements.times_content.childNodes;
-    for (let i = 0; i < deletedIndex; i++){
+    for (let i = 0; i < nodes.length; i++){
+        // console.log(i);
         let node = nodes[i];
         let index = parseInt(node.dataset.index);
-        let newIndex = index + ammout;
-        node.dataset.index = newIndex;
-        node.childNodes[1].innerText = newIndex+ammout;
+        if (index > timesData.length-1){
+            node.remove();
+            i--; // dont skip a node
+            continue;
+        }
+        let data = timesData[index];
+        
+        let avgs = getAvgAtIndex(index)[0];
+        
+        node.childNodes[5].innerText = convertMilisToTime(avgs.ao5);
+        if (data.newTimes && data.newTimes.ao5) node.childNodes[5].classList.add('newRecord_time');
+        else node.childNodes[5].classList.remove('newRecord_time');
+        node.childNodes[7].innerText = convertMilisToTime(avgs.ao12);
+        if (data.newTimes && data.newTimes.ao12) node.childNodes[7].classList.add('newRecord_time');
+        else node.childNodes[7].classList.remove('newRecord_time');
+
+        node.childNodes[1].innerText = index + 1;
+        node.childNodes[3].innerText = convertMilisToTime(data.time);
+        if (data.newTimes && data.newTimes.single) node.childNodes[3].classList.add('newRecord_time');
+        else node.childNodes[3].classList.remove('newRecord_time');
+    
     }
 }
 
 function loadAllRecords(){
+    actions.sessionBest = {
+        single: 0,
+        ao5: 0,
+        ao12: 0
+    }
     for (let i = 0; i < timesData.length; i++){
         timesData[i].newTimes = {};
         let newAvg = getAvgAtIndex(i)[1];
@@ -1135,7 +1228,7 @@ function loadApp(){
     }
     // simulateTimerStop();
     mainLoop();
+    loadSessionsWindow();
 
     actions.appLoaded = true;
 }
-loadMakeSureDeleteMessage();

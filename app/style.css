@@ -6,6 +6,7 @@
     --background-darker: #1b1b1b;
     --ready-color: green;
     --left-size-min-width: 250px;
+    --nice-outline: #2495f1;
 }
 body{
     background-color: var(--background-dark);
@@ -72,7 +73,7 @@ input[type="number"]::-webkit-outer-spin-button{
 }
 .timer_info{
     font-size: 3vw;
-    color: #2495f1;
+    color: var(--nice-outline);
 }
 #overlay{
     position: fixed;
@@ -148,7 +149,7 @@ input[type="number"]::-webkit-outer-spin-button{
     justify-content: center;
     text-align: center;
     font-size: 3vw;
-    color: #2495f1;
+    color: var(--nice-outline);
     pointer-events: all;
 }
 #times_content{
@@ -215,7 +216,7 @@ input[type="number"]::-webkit-outer-spin-button{
 }
 .times_solveNum{
     /* background-color: var(--background-darker); */
-    color: #2495f1;
+    color: var(--nice-outline);
 }
 .time_row{
     width: 25%;
@@ -253,7 +254,7 @@ input[type="number"]::-webkit-outer-spin-button{
     max-width: 600px;
     aspect-ratio: 16 / 9;
     background-color: var(--background-darker);
-    border: 2px solid#2495f1; 
+    border: 2px solidvar(--nice-outline); 
     font-size: 4vw;
     padding: 10px;
     position: relative;
@@ -390,9 +391,93 @@ input[type="number"]::-webkit-outer-spin-button{
 #loadProgress{
     font-size: 6vw;
 }
+#info_bar{
+    display: flex;
+    justify-content: center;
+    pointer-events: all;
+    margin-top: 5px;
+    gap: 10px;
+}
+.info_btn{
+    text-transform: uppercase;
+    color: var(--font-color);
+    border: 2px solid var(--font-color);
+    padding: 5px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.info_btn:hover{
+    background-color: var(--font-color);
+    color: var(--background-darker);
+    transition: 0.2s;
+}
+.disabled{
+    opacity: 0.5;
+    cursor:not-allowed;
+}
+#window_box{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+#window{
+    width: 60vw;
+    max-width: 500px;
+    aspect-ratio: 1 / 1;
+    background-color: var(--background-darker);
+    border: 2px solid var(--nice-outline);
+}
+#sessions_window_content{
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    width: calc(100% - 20px);
+    max-width: 100%;
+    max-height: calc(100% - 10px);
+    position: relative;
+    gap: 10px;
+    padding: 10px;
+    flex-wrap: wrap;
+    overflow-y: auto;
+}
+#sessions_window_content::-webkit-scrollbar{
+    display: none;
+}
+.session_card{
+    border: 2px solid var(--nice-outline);
+    /* width: 12vw; */
+    aspect-ratio: 1 / 1;
+    border-radius: 15px;
+    background-color: var(--background-light);
+    pointer-events: all;
+    cursor: pointer;
+    opacity: 0.8;
+    user-select: none;
+    padding: 1vw;
+    /* width: 100%; */
+    /* max-width: 118px; */
+}
+.session_card:hover{
+    opacity: 1;
+}
+.session_name_card{
+    text-align: center;
+    text-transform: uppercase;
+    overflow: hidden;
+    height: 20px;
+}
+#window_title{
+    text-transform: uppercase;
+    text-align: center;
+    font-size: 2vw;
+}
 #mean_number_of_solves{
     font-size: 1.8vw;
-    color: #2495f1;
+    color: var(--nice-outline);
 }
 #notification{
     position: absolute;
