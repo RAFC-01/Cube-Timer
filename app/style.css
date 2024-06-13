@@ -88,6 +88,7 @@ input[type="number"]::-webkit-outer-spin-button{
     position: relative;
     width: 100%;
     height: 100vh;
+    z-index: 2;
 }
 #session_times{
     width: 15vw;
@@ -108,6 +109,12 @@ input[type="number"]::-webkit-outer-spin-button{
     /* border-top: 2px solid var(--font-color); */
     border-bottom: 2px solid var(--font-color);
     user-select: none;
+    display: flex;
+    flex-direction: column;
+}
+#sessions_title_name{
+    font-size: 1.5vw;
+    color: var(--font-need-color);
 }
 #records{
     width: 100%;
@@ -175,6 +182,7 @@ input[type="number"]::-webkit-outer-spin-button{
     width: 25%;
     text-align: center;
     background-color: #362910;
+    overflow: hidden;
 }
 #scramble-left{
     width: 15vw;
@@ -254,7 +262,7 @@ input[type="number"]::-webkit-outer-spin-button{
     max-width: 600px;
     aspect-ratio: 16 / 9;
     background-color: var(--background-darker);
-    border: 2px solidvar(--nice-outline); 
+    border: 2px solid var(--nice-outline); 
     font-size: 4vw;
     padding: 10px;
     position: relative;
@@ -405,6 +413,7 @@ input[type="number"]::-webkit-outer-spin-button{
     padding: 5px;
     cursor: pointer;
     transition: 0.2s;
+    pointer-events: all;
 }
 .info_btn:hover{
     background-color: var(--font-color);
@@ -424,15 +433,27 @@ input[type="number"]::-webkit-outer-spin-button{
     display: flex;
     justify-content: center;
     align-items: center;
+    pointer-events: all;
+}
+#wholeScreenCheck{
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+    pointer-events: all;
 }
 #window{
+    position: relative;
     width: 60vw;
     max-width: 500px;
     aspect-ratio: 1 / 1;
     background-color: var(--background-darker);
     border: 2px solid var(--nice-outline);
+    pointer-events: all;
 }
-#sessions_window_content{
+#window_content{
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     width: calc(100% - 20px);
@@ -444,8 +465,64 @@ input[type="number"]::-webkit-outer-spin-button{
     flex-wrap: wrap;
     overflow-y: auto;
 }
-#sessions_window_content::-webkit-scrollbar{
+#window_content::-webkit-scrollbar{
     display: none;
+}
+#window_buttons{
+    position: absolute;
+    bottom: 0px;
+    width: calc(100% - 10px);
+    display: flex;
+    justify-content: end;
+    padding: 5px;
+}
+#window_small_popup_box{
+    position: absolute;
+    top: 0px;
+    width: 100%;
+    height: 100%;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    background-color: #0505056e;
+    pointer-events: all;
+}
+#window_small_popup{
+    width: 40%;
+    height: fit-content;
+    border: 2px solid var(--nice-outline);
+    background-color: var(--background-light);
+    padding: 10px;
+}
+.smallInput{
+    background-color: var(--background-dark);
+    outline: 1px solid var(--nice-outline);
+    border: 0px;
+    border-radius: 5px;
+    color: var(--font-color);
+}
+#window_small_popup_buttons{
+    display: flex;
+    gap: 5%;
+    margin-top: 15px;
+    text-align: center;
+}
+.small_btn{
+    text-transform: uppercase;
+    width: 100%;
+}
+#window_small_popup_content{
+    font-size: 1.8vw;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+#window_small_popup_title{
+    font-size: 2vw;
+    text-transform: uppercase;
+    text-align: center;
+    padding-bottom: 5px;
+    border-bottom: 2px solid var(--font-color);
 }
 .session_card{
     border: 2px solid var(--nice-outline);
@@ -473,7 +550,13 @@ input[type="number"]::-webkit-outer-spin-button{
 #window_title{
     text-transform: uppercase;
     text-align: center;
-    font-size: 2vw;
+    font-size: 3vw;
+    position: relative;
+    padding: 5px 0px;
+}
+#window_close_btn{
+    top: 12px;
+    right: 12px;
 }
 #mean_number_of_solves{
     font-size: 1.8vw;

@@ -4,7 +4,7 @@
 // 0.4 alpha - deleting times, swiching sessions
 const appTitle = 'Cube Timer';
 
-const version = '0.3 alpha';
+const version = '0.4 alpha';
 
 document.title = appTitle + ' - version ' + version;
 
@@ -73,7 +73,15 @@ const elements = {
     info_current_puzzle: document.getElementById('info_current_puzzle'),
     info_other_sessions: document.getElementById('info_other_sessions'),
     window: document.getElementById('window'),
-    window_box: document.getElementById('window_box')
+    window_box: document.getElementById('window_box'),
+    window_content: document.getElementById('window_content'),
+    window_title: document.getElementById('window_title_text'),
+    window_buttons: document.getElementById('window_buttons'),
+    sessions_title_name: document.getElementById('sessions_title_name'),
+    window_small_popup_title: document.getElementById('window_small_popup_title'),
+    window_small_popup_content: document.getElementById('window_small_popup_content'),
+    window_small_popup_buttons: document.getElementById('window_small_popup_buttons'),
+    window_small_popup_box: document.getElementById('window_small_popup_box'),
 }
 
 let allTimeBest = {
@@ -206,32 +214,34 @@ function closePopUp(){
     actions.popupOpened = false;
     elements.popup_box.style.display = 'none';
 }
-function openWindow(content){
+function openWindow(content, title = 'no title'){
+    actions.windowOpened = true;
     elements.window_box.style.display = 'flex';
-    elements.window.append(content);
+    elements.window_title.innerHTML = title;
+    elements.window_content.innerHTML = content.innerHTML;
 }
 function closeWindow(){
-    elements.window_box.style.display = 'flex';
+    actions.windowOpened = false;
+    elements.window_box.style.display = 'none';
     setAllWindowsToFalse();
 }
 function loadSessionsWindow(){
     if (actions.sessionWindowOpen) return;
     let sessions = savableData.mainData.sessions;
     let contentDiv = document.createElement('div');
-    contentDiv.id = 'sessions_window_content';
     let content = '';
     let thisSession = sessions[currentSession.id];
     for (let i = 0; i < sessions.length; i++){
         let session = sessions[i];
 
-        if (session.mode != thisSession.mode || session.puzzle != thisSession.puzzle) continue;
+        if (session.mode != thisSession.mode) continue;
         
         let activeDiv = session.id == currentSession.id ? `<div class='session_active_card'>Active</div>` : '';
 
         let name = session.name.length ? session.name : 'session '+session.id; 
 
         content += `
-            <div class='session_card'>
+            <div class='session_card' data-index='${i}'>
                 <div style='pointer-events: none'>
                     <div class='session_name_card'>"${name}"</div>
                     <p>Mode: ${session.mode}</p>
@@ -243,8 +253,19 @@ function loadSessionsWindow(){
     }
     contentDiv.innerHTML = content;
     actions.sessionWindowOpen = true;
-    document.getElementById('window_title').innerHTML = 'Your sessions';
-    openWindow(contentDiv);
+    elements.window_buttons.innerHTML = `<div id='sessoion_create_btn' class='info_btn'>Create New Session</div>`
+    openWindow(contentDiv, 'Your Sessions');
+}
+function openWindowSmallPopUp(content, title){
+    actions.smallPopOpen = true;
+    elements.window_small_popup_box.style.display = 'flex';
+    elements.window_small_popup_content.innerHTML = content;
+    elements.window_small_popup_title.innerHTML = title;
+}
+function closeWindowSmallPopUp(){
+    actions.smallPopOpen = true;
+    actions.createSessionPopUp = false;
+    elements.window_small_popup_box.style.display = 'none';
 }
 function setAllWindowsToFalse(){
     actions.sessionWindowOpen = false;
@@ -256,6 +277,21 @@ function getNewScramble(puzzle = options.currentPuzzle){
 
     elements.scramble_string.innerText = scramble;
 
+}
+
+function loadCreateSessionPopUp(){
+    actions.createSessionPopUp = true;
+    let data = savableData.mainData;
+    let defaultName = 'session '+data.numberOfAllSessions;
+    let content = `
+            Name
+            <input type='text' value='${defaultName}' placeholder='session name' id='small_window_session_name' class='smallInput'/>
+            Puzzle
+            <select class='smallInput' id='small_window_session_puzzle'>
+                <option value='2x2'>2x2x2</option>
+            </select>
+    `;
+    openWindowSmallPopUp(content, 'create session');
 }
 
 function getTimeNeededForNewAvgs(){
@@ -507,7 +543,12 @@ function saveAllTimes(data = {}){
         return false;
     }
 }
- 
+function getSessionById(id){
+    for (let i = 0; i < savableData.mainData.sessions.length; i++){
+        let s = savableData.mainData.sessions[i];
+        if (s.id == id) return s;
+    }
+}
 function getCurrentSession(){
     if (!savableData.mainData || !savableData.mainData.sessions) return;
     for (let i = 0; i < savableData.mainData.sessions.length; i++){
@@ -865,8 +906,23 @@ document.addEventListener('mousedown', (e) => {
     if (actions.popupOpened && !t.id.includes('popup')){
         closePopUp();
     }
+    if ((t.id == 'window_box' || t.id == 'wholeScreenCheck') && actions.windowOpened && !actions.smallPopOpen){
+        closeWindow();
+    }
+    if ((t.id == 'window_small_popup_box' || t.id == 'wholeScreenCheck' || t.id == 'window_box') && actions.smallPopOpen){
+        closeWindowSmallPopUp();
+    }
     if (t.id == 'popup_close_btn' || t.id == 'popup_ok_btn'){
         closePopUp();
+    }
+    if (t.id == 'window_small_ok_btn'){
+        if (actions.createSessionPopUp){
+            let name = document.getElementById('small_window_session_name').value;
+            let puzzle =  document.getElementById('small_window_session_puzzle').value;
+            createSession({name: name, puzzle: puzzle});
+        }
+        closeWindowSmallPopUp();
+        closeWindow();
     }
     if (t.id == 'popup_remove_btn'){
         let index = t.dataset.index;
@@ -883,6 +939,19 @@ document.addEventListener('mousedown', (e) => {
             removeAllSessionTimes();
             closePopUp();
         }
+    }
+    if (t.id == 'window_close_btn'){
+        closeWindow();
+    }
+    if (t.id == 'sessoion_create_btn') loadCreateSessionPopUp();
+    if (t.id == 'info_new_scramble_btn') getNewScramble();
+    if (t.classList.contains('session_card')){
+        let index = t.dataset.index;
+        let sessionID = savableData.mainData.sessions[index].id;
+        if (currentSession.id != sessionID){
+            loadSession(sessionID);
+            closeWindow();
+        } 
     }
     if (t.classList.contains('times_time')){
         let index = t.parentElement.dataset.index;
@@ -987,9 +1056,9 @@ function createSession(data = {}){
     let numberOfSessions = mainData.numberOfAllSessions ? mainData.numberOfAllSessions : 0;
     let session = {
         id: numberOfSessions,
-        name: '',
+        name: data.name.length ? data.name : '',
         puzzle: data.puzzle,
-        mode: data.mode,
+        mode: data.mode.length ? data.mode : 'classic',
     }
     loadData('session'+session.id, {isSession: true, fileLoc: 'sessions'});
     currentSession = session;
@@ -1133,15 +1202,17 @@ function loadSession(sessionID){
 
         if (name) loadData(name, {isSession: true, fileLoc: 'sessions'});
     }
-
     if (savableData.mainData.sessionID != currentSession.id) {
         savableData.mainData.sessionID =  currentSession.id;
         markAsChanged('mainData');
     }
+        
+    let session = getSessionById(sessionID);
+    let name = session.name.length ? session.name : 'session '+session.id;
+    elements.sessions_title_name.innerText = `"${name}"`;
     actions.currentSession = getCurrentSession();
     getNewScramble(options.currentPuzzle);
 }
-
 function updateProgressWindow(){
     let loadProcentage =  Object.keys(loadStatus).length / requriedToStart.length;
     let content = `
@@ -1229,6 +1300,6 @@ function loadApp(){
     // simulateTimerStop();
     mainLoop();
     loadSessionsWindow();
-
+    loadCreateSessionPopUp();
     actions.appLoaded = true;
 }
