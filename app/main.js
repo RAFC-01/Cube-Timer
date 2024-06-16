@@ -2,9 +2,10 @@
 // 0.2 alpha - saving data (best only for now), timer mode typing
 // 0.3 alpha - saving whole sessions, highlighting best times of the session
 // 0.4 alpha - deleting times, swiching sessions
+// 0.5 alpha - time distribution grapth, creating sessions
 const appTitle = 'Cube Timer';
 
-const version = '0.4 alpha';
+const version = '0.5 alpha';
 
 document.title = appTitle + ' - version ' + version;
 
@@ -82,7 +83,12 @@ const elements = {
     window_small_popup_content: document.getElementById('window_small_popup_content'),
     window_small_popup_buttons: document.getElementById('window_small_popup_buttons'),
     window_small_popup_box: document.getElementById('window_small_popup_box'),
-}
+    wholeScreenCheck: document.getElementById('wholeScreenCheck'),
+    time_distribution: document.getElementById('time_distribution'),
+    time_distribution_numbers: document.getElementById('time_distribution_numbers'),
+    time_distribution_content: document.getElementById('time_distribution_content'),
+    bottom_functions: document.getElementById('bottom_functions'),
+}   
 
 let allTimeBest = {
     single: 0,
@@ -104,6 +110,7 @@ const actions = {
     },
     currentSession: 0,
     notificationIter: 0,
+    timeDistributionOpen: true,
 }
 
 function mainLoop(){
@@ -216,11 +223,13 @@ function closePopUp(){
 }
 function openWindow(content, title = 'no title'){
     actions.windowOpened = true;
+    elements.wholeScreenCheck.style.display = 'block';
     elements.window_box.style.display = 'flex';
     elements.window_title.innerHTML = title;
     elements.window_content.innerHTML = content.innerHTML;
 }
 function closeWindow(){
+    elements.wholeScreenCheck.style.display = 'none';
     actions.windowOpened = false;
     elements.window_box.style.display = 'none';
     setAllWindowsToFalse();
@@ -239,6 +248,7 @@ function loadSessionsWindow(){
         let activeDiv = session.id == currentSession.id ? `<div class='session_active_card'>Active</div>` : '';
 
         let name = session.name.length ? session.name : 'session '+session.id; 
+        let mean = convertMilisToTime(session.mean) || ' - ';
 
         content += `
             <div class='session_card' data-index='${i}'>
@@ -246,6 +256,8 @@ function loadSessionsWindow(){
                     <div class='session_name_card'>"${name}"</div>
                     <p>Mode: ${session.mode}</p>
                     <p>puzzle: ${session.puzzle}</p>
+                    <p>Mean: ${mean}</p>
+                    <p>Solves: ${session.solves || 0}</p>
                     ${activeDiv}    
                 </div>
             </div>            
@@ -263,7 +275,7 @@ function openWindowSmallPopUp(content, title){
     elements.window_small_popup_title.innerHTML = title;
 }
 function closeWindowSmallPopUp(){
-    actions.smallPopOpen = true;
+    actions.smallPopOpen = false;
     actions.createSessionPopUp = false;
     elements.window_small_popup_box.style.display = 'none';
 }
@@ -473,6 +485,7 @@ function stopTimer(){
         elements.notification.style.display = 'block';
         actions.notificationShown = true;
         actions.notificationIter = 0;
+        elements.bottom_functions.style.display = 'none';
     }
     if (newSingle.all) console.log('new single all');
 
@@ -483,6 +496,7 @@ function stopTimer(){
         elements.notification.style.display = 'block';
         actions.notificationShown = true;
         actions.notificationIter = 0;
+        elements.bottom_functions.style.display = 'none';
     }
     if (newAvgs.ao5.all) console.log('new all ao5');
     if (newAvgs.ao12.session && notifyAvg12){
@@ -490,6 +504,7 @@ function stopTimer(){
         elements.notification.style.display = 'block';
         actions.notificationShown = true;
         actions.notificationIter = 0;
+        elements.bottom_functions.style.display = 'none';
     }
     if (newAvgs.ao12.all) console.log('new all ao12');
 
@@ -507,6 +522,8 @@ function stopTimer(){
         // feature: [A] tripple muffin
     }
     addTimesDiv(data);
+
+    updateTimeDistribution();
 
     getNewScramble();
 }
@@ -603,7 +620,42 @@ function updateBestAo12(data = {}){
     }         
     return newBest;
 } 
+function updateTimeDistribution(){
+    elements.time_distribution.style.display = 'block';
+    let times = {};
+    let sessionName = getSessionName();
+    let biggest = -1;
+    // only seconds mode for now
+    for (let i = 0; i < savableData[sessionName].arr.length; i++){
+        let t = savableData[sessionName].arr[i].time;
+        let s = Math.floor(t / 1000);
+        times[s] ? times[s] += 1 : times[s] = 1;
+        if (biggest == -1 || times[s] > times[biggest]) biggest = s;
+    }
+    let keys = Object.keys(times);
+    if (!keys.length){
+        elements.time_distribution.style.display = 'none';
+        return;
+    }
+    let start = parseInt(keys[0]);
+    let end = keys.length > 8 ? start+8 : start + parseInt(keys[keys.length-1]);
+    let numbersContent = '';
+    let content = '';
+    if (!times[biggest]) times[biggest] = 1;
+    console.log(end);
+    for (let i = start; i < end; i++){
+        let t = times[i] || 0;
+        let height = t / times[biggest] * 100;
+        numbersContent += `<div class='time_dist_num'>${i}+</div>`    
+        let align = height < 15 ? 'end' : 'center';    
+        // let color = height < 15 ? 'var(--font-color)' : 'black';
+        content += `<div class='time_dist_column' style='height: ${height}%; align-items: ${align};'><div>${t}</div></div>`;
+    }
+    elements.time_distribution_numbers.innerHTML = numbersContent;
+    elements.time_distribution_content.innerHTML = content;
+    console.log(times, biggest, start);
 
+}
 function loadData(path, data = {}){
     if (!data.fileLoc) data.fileLoc = 'saves';
     window.electron.send('get-data', {path: path, isSession: data.isSession, fileLoc: data.fileLoc, type: data.type}); 
@@ -665,6 +717,9 @@ function calculateMean(){
     }else{
         elements.mean_number.innerText = '.....';
     }
+    let session = getCurrentSession();
+    session.mean = mean;
+    session.solves = timesData.length;
     elements.mean_number_of_solves.innerText = ' (' + timesData.length + ')';
 
 }
@@ -895,10 +950,12 @@ function stopNotifination(){
     elements.n_ao12.style.display = 'none';
     elements.notification.style.display = 'none';
 }
-document.querySelector('#notification > div').addEventListener('animationiteration' , (e)=> {
+document.querySelector('#notification > div').addEventListener('animationiteration' , ()=> {
+    elements.bottom_functions.style.display = 'none';
     actions.notificationIter++;
     if (actions.notificationShown && actions.notificationIter > 2){
         stopNotifination();
+        elements.bottom_functions.style.display = 'flex';
     } 
 })
 document.addEventListener('mousedown', (e) => {
@@ -910,6 +967,9 @@ document.addEventListener('mousedown', (e) => {
         closeWindow();
     }
     if ((t.id == 'window_small_popup_box' || t.id == 'wholeScreenCheck' || t.id == 'window_box') && actions.smallPopOpen){
+        closeWindowSmallPopUp();
+    }
+    if (t.id == 'window_small_cancel_btn'){
         closeWindowSmallPopUp();
     }
     if (t.id == 'popup_close_btn' || t.id == 'popup_ok_btn'){
@@ -1167,6 +1227,7 @@ function loadSessionTimes(data){
     calculateMean();
     calculateAo();
     updateNeedTimes();
+    updateTimeDistribution();
 }
 function addTimes(num, time){
     for (let i = 0; i < num; i++){
@@ -1299,7 +1360,5 @@ function loadApp(){
     }
     // simulateTimerStop();
     mainLoop();
-    loadSessionsWindow();
-    loadCreateSessionPopUp();
     actions.appLoaded = true;
 }
