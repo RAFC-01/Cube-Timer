@@ -1510,7 +1510,7 @@ function generateCube2D(cubeType = '2x2'){
         }
     }
     const rotateFace = (moveBy, index) => {
-        
+
     }
     // moveF();
     return {cubeArr, moveF, moveU};
@@ -1526,4 +1526,4 @@ function randomInt(to){
 function clamp(value, min, max){
     return Math.max(Math.min(value, max), min);
 }
-getScrambleImage('');
+// getScrambleImage('');
