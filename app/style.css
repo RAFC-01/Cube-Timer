@@ -414,6 +414,7 @@ input[type="number"]::-webkit-outer-spin-button{
     cursor: pointer;
     transition: 0.2s;
     pointer-events: all;
+    user-select: none;
 }
 .info_btn:hover{
     background-color: var(--font-color);
