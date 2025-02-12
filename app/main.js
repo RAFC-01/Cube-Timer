@@ -1362,14 +1362,14 @@ function loadApp(){
     mainLoop();
     actions.appLoaded = true;
 }
-function getScrambleImage(moves, cubeType = '2x2'){
+function getScrambleImage(moves, cubeType = '3x3'){
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
     const { cubeArr, moveF, moveU} = generateCube2D(cubeType);
 
-    moveF();
     moveU();
+    moveF();
 
     const squareSize = 40;
     const padding = 30;
@@ -1386,7 +1386,7 @@ function getScrambleImage(moves, cubeType = '2x2'){
     ctx.fillStyle = '#777';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const colors = ['orange', '#1c8f17', 'red', '#2495f1', 'white', 'yellow'];
+    const colors = ['orange', '#1c8f17', 'red', '#1a4bbf', 'white', 'yellow'];
     const positions = [{x: 0, y: 1}, {x: 1, y: 1}, {x: 2, y: 1}, {x: 3, y: 1}, {x: 1, y: 0}, {x: 1, y: 2}]
 
     for (let i = 0; i < cubeArr.length; i++){
@@ -1431,7 +1431,7 @@ function getScrambleImage(moves, cubeType = '2x2'){
     document.body.appendChild(canvas);
 }
 
-function generateCube2D(cubeType = '2x2'){
+function generateCube2D(cubeType = '3x3'){
     const cubeArr = [];
     let squaresPerFace = getSquaresPerFace(cubeType);
 
@@ -1445,15 +1445,16 @@ function generateCube2D(cubeType = '2x2'){
 
     const moveF = (moveBy = 1) => {
         let facesToSlide = [5, 0, 4, 2];
-        let startIdxs = [0, 0, 0, 1, 1, 0, 0, 0];
+        let startIdxs = [0, 0, 0, 0, 0, 1, 1, 0];
         let currentFace = 1; // face to rotate
+        rotateFace(1, currentFace);
         // calculate changes
         moveBy = clamp(moveBy, 0, 4);
         let changes = [];
         for (let i = 0; i < facesToSlide.length; i++){
             let previousIndex = i-moveBy < 0 ? 4 + (i - moveBy) : i-moveBy
             const sampleFrom = cubeArr[facesToSlide[previousIndex]];
-            console.log(sampleFrom);
+            // console.log(sampleFrom);
             // 0 0 - 0 1
             // 0 1 - 1 1
             // 1 0 - 1 1
@@ -1476,11 +1477,16 @@ function generateCube2D(cubeType = '2x2'){
             let prevMod = 1 - previousIndex % 2;
             let end = mod ? squaresPerFace.firstNum : squaresPerFace.secondNum;
 
+            console.log(facesToSlide[i])
             for (let j = 0; j < end; j++){
-                let addToX = mod ? j : 0;
-                let addToXprev = prevMod ? 0 : j;
-                changes.push({x: start.x + addToX, y: start.y + j - addToX,
-                    new: sampleFrom[prevStart.y + addToXprev][prevStart.x + j - addToXprev],
+                let addToX = mod ? 0 : j;
+                let currPos = {
+                    x: start.x + addToX,
+                    y: start.y + j - addToX
+                }
+                let newPos = rotateCoords(currPos.x, currPos.y, moveBy);
+                changes.push({x: newPos.j, y: newPos.i,
+                    new: sampleFrom[currPos.y][currPos.x],
                     face: facesToSlide[i]
                 });
             }
@@ -1489,13 +1495,13 @@ function generateCube2D(cubeType = '2x2'){
         for (let i = 0; i < changes.length; i++){
             let change = changes[i];
             const face = cubeArr[change.face];
-            console.log(change);
             face[change.y][change.x] = change.new;
         }
     }
     const moveU = (moveBy = 1) => {
         let facesToSlide = [0, 1, 2, 3];
         let currentFace = 4; // face to rotate
+        rotateFace(1, currentFace);
 
         let changes = [];
         for (let i = 0; i < facesToSlide.length; i++){
@@ -1510,9 +1516,99 @@ function generateCube2D(cubeType = '2x2'){
         }
     }
     const rotateFace = (moveBy, index) => {
+        // 0 0 - 0 1
+        // 0 1 - 1 1
+        // 1 1 - 1 0
+        // 1 0 - 0 0
 
+        // currY, currX => (the same as currX), height - currY
+        // 2 1 - 1 1 
+        // 2 2 - 2 1
+        // 1 1 - 1 0
+
+        // 5 x 5
+        // 1 1 - 1 3
+        // 2 3 - 2 1
+        // 3 3 - 3 1
+        // 4 4 - 4 0 
+        // 2 4 - 4 2
+        // 1 2 - 2 1
+        // 0 3 - 3 4
+        // 0 2 - 2 4 
+        // 0 0 - 1 0
+        /**
+         * @type {Array}
+         */
+        let face = cubeArr[index];
+        let newFace = [];
+        for (let i = 0; i < face[0].length; i++){
+            newFace.push([]);
+            for (let j = 0; j < face.length; j++){
+                newFace[i][j] = face[i][j];
+            }
+        }
+        const changes = [];
+        const positions = [
+            {
+                Sx: 0,
+                Sy: 0,
+                Fx: face[0].length,
+                Fy: Math.ceil(face.length / 2)
+            },
+            {
+                Sx: 0,
+                Sy: 0,
+                Fx: Math.ceil(face[0].length / 2),
+                Fy: face.length,
+            },
+            {
+                Sx: Math.ceil(face[0].length / 2),
+                Sy: 0,
+                Fx: face[0].length,
+                Fy: face.length
+            },
+            {
+                Sx: 0,
+                Sy: Math.ceil(face.length / 2),
+                Fx: face[0].length,
+                Fy: face.length
+            },
+            
+        ]
+        for (let i = 0; i < 4; i++){
+            let pos = positions[i];
+            for (let x = pos.Sx; x < pos.Fx; x++){
+                for (let y = pos.Sy; y < pos.Fy; y++){
+                    let rPos = rotateCoords(x, y, moveBy);
+                    newFace[rPos.i][rPos.j] = face[y][x];
+                    // console.log(`${y}, ${x} => ${x}, ${face.length - 1 - y}`);
+                }                    
+            }
+        }
+        cubeArr[index] = newFace;
     }
-    // moveF();
+    const rotateCoords = (currX, currY, rotateBy = 1) => {
+        // currY, currX => (the same as currX), height - currY 
+        // 0 0 - 1 1
+        // 0 1 - 1 0
+        let pos = {
+            i: currX,
+            j: squaresPerFace.secondNum - 1 - currY
+        }
+        if (rotateBy == 2){
+            pos = {
+                i: squaresPerFace.firstNum - 1 - currY,
+                j: squaresPerFace.secondNum - 1 - currX
+            }
+        }
+        if (rotateBy == 3){
+            pos = {
+                i: squaresPerFace.firstNum - 1 - currX,
+                j: currY
+            }            
+        }
+        return pos;
+    }
     return {cubeArr, moveF, moveU};
 }
 function getSquaresPerFace(cubeType){
@@ -1526,4 +1622,4 @@ function randomInt(to){
 function clamp(value, min, max){
     return Math.max(Math.min(value, max), min);
 }
-// getScrambleImage('');
+getScrambleImage('');
