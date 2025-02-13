@@ -287,6 +287,9 @@ function getNewScramble(puzzle = options.currentPuzzle){
 
     actions.lastGeneratedScramble = scramble;
 
+    getScrambleImage(scramble);
+    console.log(scramble);
+
     elements.scramble_string.innerText = scramble;
 
 }
@@ -1362,14 +1365,50 @@ function loadApp(){
     mainLoop();
     actions.appLoaded = true;
 }
-function getScrambleImage(moves, cubeType = '3x3'){
+function getScrambleImage(moves, cubeType = '2x2'){
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    const { cubeArr, moveF, moveU} = generateCube2D(cubeType);
+    const { cubeArr, moveF, moveU, moveR} = generateCube2D(cubeType);
 
-    moveU();
-    moveF();
+    // moves = `R F' U' R F2 R' F R F`;
+
+    let moveArr = moves.split(' ');
+    // console.log(moveArr);
+
+    let i = 0;
+    const move = () => {
+        if (i >= moveArr.length) return;
+        let moveType = moveArr[i][0];
+        let moveQ = moveArr[i][1];
+        let amm = moveQ == "'" ? 3 : +moveQ || 1;
+        // if (amm)amm = 1;
+        // console.log(moveArr[i], amm);
+        if (moveType == 'U'){
+            moveU(amm)
+        }
+        if (moveType == 'R'){
+            moveR(amm);
+        }
+        if (moveType == 'F'){
+            moveF(amm);
+        }
+        i++;
+    }
+    for (let j = 0; j < moveArr.length; j++){
+        move();
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key == 'n'){
+            move();
+            reDraw();
+        }
+    })
+
+    // moveF();
+    // moveR(3);
+    // moveU(2);
+    // moveF(2);
 
     const squareSize = 40;
     const padding = 30;
@@ -1383,51 +1422,56 @@ function getScrambleImage(moves, cubeType = '3x3'){
 
     canvas.height = faceSize.y * 3 + padding;
     canvas.width =  faceSize.x * 4 + padding;
-    ctx.fillStyle = '#777';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // ctx.fillStyle = '#777';
+    // ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const colors = ['orange', '#1c8f17', 'red', '#1a4bbf', 'white', 'yellow'];
     const positions = [{x: 0, y: 1}, {x: 1, y: 1}, {x: 2, y: 1}, {x: 3, y: 1}, {x: 1, y: 0}, {x: 1, y: 2}]
 
-    for (let i = 0; i < cubeArr.length; i++){
-        let face = cubeArr[i];
-        let pos = positions[i];
-        let startX = pos.x * faceSize.x;
-        let startY = pos.y * faceSize.y;
-        let gapX = 5*pos.x+5;
-        let gapY = 5*pos.y+5;
-        for (let y = 0; y < face.length; y++){
-            for (let x = 0; x < face[y].length; x++){
-                let color = colors[face[y][x]];
-                ctx.fillStyle = color;
-                ctx.fillRect(startX + x * squareSize + gapX, startY + y * squareSize + gapY, squareSize, squareSize);
+    const reDraw = () => {
+        for (let i = 0; i < cubeArr.length; i++){
+            let face = cubeArr[i];
+            let pos = positions[i];
+            let startX = pos.x * faceSize.x;
+            let startY = pos.y * faceSize.y;
+            let gapX = 5*pos.x+5;
+            let gapY = 5*pos.y+5;
+            for (let y = 0; y < face.length; y++){
+                for (let x = 0; x < face[y].length; x++){
+                    let color = colors[face[y][x]];
+                    ctx.fillStyle = color;
+                    ctx.fillRect(startX + x * squareSize + gapX, startY + y * squareSize + gapY, squareSize, squareSize);
+                }
+            }
+    
+            // outlines
+            ctx.lineWidth = 2;
+            ctx.strokeRect(startX+gapX, startY+gapY, faceSize.x, faceSize.y);
+            // lines
+            ctx.beginPath();
+            for (let x = 0; x < face[0].length - 1; x++){
+                ctx.moveTo(startX+gapX + squareSize*(x+1), startY+gapY);
+                ctx.lineTo(startX+gapX + squareSize*(x+1), startY+gapY + faceSize.y);
+            }
+            for (let y = 0; y < face.length - 1; y++){
+                ctx.moveTo(startX+gapX, startY+gapY + squareSize * (y + 1));
+                ctx.lineTo(startX+gapX + faceSize.x, startY+gapY + squareSize * (y + 1));
+            }
+            ctx.closePath();
+            ctx.stroke();
+    
+            if (showFaceNumbers){
+                ctx.fillStyle = 'black';
+                ctx.font = '20px Arial'
+                ctx.fillText(i, startX+gapX + faceSize.x / 2 + 10, startY+gapY + faceSize.y / 2 - 7);
             }
         }
-
-        // outlines
-        ctx.lineWidth = 2;
-        ctx.strokeRect(startX+gapX, startY+gapY, faceSize.x, faceSize.y);
-        // lines
-        ctx.beginPath();
-        for (let x = 0; x < face[0].length - 1; x++){
-            ctx.moveTo(startX+gapX + squareSize*(x+1), startY+gapY);
-            ctx.lineTo(startX+gapX + squareSize*(x+1), startY+gapY + faceSize.y);
-        }
-        for (let y = 0; y < face.length - 1; y++){
-            ctx.moveTo(startX+gapX, startY+gapY + squareSize * (y + 1));
-            ctx.lineTo(startX+gapX + faceSize.x, startY+gapY + squareSize * (y + 1));
-        }
-        ctx.closePath();
-        ctx.stroke();
-
-        if (showFaceNumbers){
-            ctx.fillStyle = 'black';
-            ctx.font = '20px Arial'
-            ctx.fillText(i, startX+gapX + faceSize.x / 2 + 10, startY+gapY + faceSize.y / 2 - 7);
-        }
     }
+    reDraw();
 
     canvas.style.position = 'fixed';
+    canvas.style.right = '0px';
+    canvas.style.bottom = '0px';
     document.body.appendChild(canvas);
 }
 
@@ -1445,14 +1489,15 @@ function generateCube2D(cubeType = '3x3'){
 
     const moveF = (moveBy = 1) => {
         let facesToSlide = [5, 0, 4, 2];
-        let startIdxs = [0, 0, 0, 0, 0, 1, 1, 0];
+        // what to replace
+        let startIdxs = [0, 0, 0, 1, 1, 0, 0, 0];
         let currentFace = 1; // face to rotate
-        rotateFace(1, currentFace);
+        rotateFace(moveBy, currentFace);
         // calculate changes
         moveBy = clamp(moveBy, 0, 4);
         let changes = [];
         for (let i = 0; i < facesToSlide.length; i++){
-            let previousIndex = i-moveBy < 0 ? 4 + (i - moveBy) : i-moveBy
+            let previousIndex = i-moveBy < 0 ? 4 + (i - moveBy) : i-moveBy;
             const sampleFrom = cubeArr[facesToSlide[previousIndex]];
             // console.log(sampleFrom);
             // 0 0 - 0 1
@@ -1463,30 +1508,24 @@ function generateCube2D(cubeType = '3x3'){
                 y: startIdxs[i * 2] * squaresPerFace.secondNum,
                 x: startIdxs[i * 2 + 1] * squaresPerFace.firstNum
             }
-            let prevStart = {
-                y: startIdxs[previousIndex * 2] * squaresPerFace.secondNum,
-                x: startIdxs[previousIndex * 2 + 1] * squaresPerFace.firstNum                
-            }
-
             if (start.x) start.x -= 1;
             if (start.y) start.y -= 1;
-            if (prevStart.x) prevStart.x -= 1;
-            if (prevStart.y) prevStart.y -= 1;
 
-            let mod = 1 - i % 2;
-            let prevMod = 1 - previousIndex % 2;
+            let mod = i % 2;
             let end = mod ? squaresPerFace.firstNum : squaresPerFace.secondNum;
 
-            console.log(facesToSlide[i])
+            // console.log(facesToSlide[i], facesToSlide[previousIndex]);
             for (let j = 0; j < end; j++){
                 let addToX = mod ? 0 : j;
-                let currPos = {
+                let currPos = { // to replace
                     x: start.x + addToX,
                     y: start.y + j - addToX
                 }
-                let newPos = rotateCoords(currPos.x, currPos.y, moveBy);
-                changes.push({x: newPos.j, y: newPos.i,
-                    new: sampleFrom[currPos.y][currPos.x],
+                // console.log(currPos);
+                let samplePos = rotateCoords(currPos.x, currPos.y, 4 - moveBy); // inverse rotation
+                // console.log(samplePos, sampleFrom[samplePos.i][samplePos.j]);
+                changes.push({x: currPos.x, y: currPos.y,
+                    new: sampleFrom[samplePos.i][samplePos.j],
                     face: facesToSlide[i]
                 });
             }
@@ -1501,7 +1540,7 @@ function generateCube2D(cubeType = '3x3'){
     const moveU = (moveBy = 1) => {
         let facesToSlide = [0, 1, 2, 3];
         let currentFace = 4; // face to rotate
-        rotateFace(1, currentFace);
+        rotateFace(moveBy, currentFace);
 
         let changes = [];
         for (let i = 0; i < facesToSlide.length; i++){
@@ -1513,6 +1552,36 @@ function generateCube2D(cubeType = '3x3'){
         for (let i = 0; i < changes.length; i++){
             let change = changes[i];
             cubeArr[change.face][0] = changes[i].new;
+        }
+    }
+    const moveR = (moveBy = 1) => {
+        let facesToSlide = [5, 1, 4, 3];
+
+        rotateFace(moveBy, 2); // rotate right face
+        let changes = [];
+        for (let i = 0; i < facesToSlide.length; i++){
+            let previousIndex = i-moveBy < 0 ? 4 + (i - moveBy) : i-moveBy;
+            const sampleFrom = cubeArr[facesToSlide[previousIndex]];
+            let x = 0;
+            if (facesToSlide[i] != 3){ // not back face
+                x = sampleFrom[0].length-1;
+            }
+            
+            for (let j = 0; j < sampleFrom[0].length; j++){
+                let coords = {
+                    i: j,
+                    j: x
+                }
+                if (facesToSlide[i] == 3 || facesToSlide[previousIndex] == 3){
+                    coords = rotateCoords(x ,j, 2);
+                }
+                changes.push({x: x, y: j, new: sampleFrom[coords.i][coords.j], face: facesToSlide[i]});
+            }
+        }
+        // apply changes
+        for (let i = 0; i < changes.length; i++){
+            let change = changes[i];
+            cubeArr[change.face][change.y][change.x] = changes[i].new;
         }
     }
     const rotateFace = (moveBy, index) => {
@@ -1547,7 +1616,6 @@ function generateCube2D(cubeType = '3x3'){
                 newFace[i][j] = face[i][j];
             }
         }
-        const changes = [];
         const positions = [
             {
                 Sx: 0,
@@ -1609,7 +1677,7 @@ function generateCube2D(cubeType = '3x3'){
         }
         return pos;
     }
-    return {cubeArr, moveF, moveU};
+    return {cubeArr, moveF, moveU, moveR};
 }
 function getSquaresPerFace(cubeType){
     let firstNum = +cubeType.substring(0, cubeType.indexOf('x'));
